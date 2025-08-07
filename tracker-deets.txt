@@ -1,0 +1,264 @@
+# System Functionality Documentation
+
+## Overview
+This document serves as the master reference for all system functionality. This must be consulted before any development work and explicitly referenced when determining if requested features are within scope.
+
+**IMPORTANT**: Do not modify any functionality described in this document without explicit approval. If new features are requested that are not documented here, flag them for review before implementation.
+
+---
+
+## Upload System
+
+### Navigation
+- Upload functionality is accessible via sidebar
+- Upload page contains two main options:
+  1. Single Upload
+  2. Bulk Upload *(details pending)*
+
+### Single Upload Flow
+
+#### Step 1: Upload Page Access
+- User navigates to Upload page from sidebar
+- User selects "Single Upload" option
+- System redirects to Single Upload page with upload field
+
+#### Step 2: Image Upload
+- **File Type**: Image files only (first implementation phase)
+- Upload field allows single image selection
+- Upon successful upload, image is processed and ready for further steps
+
+#### Step 3: Auto-Save to Drafts (30-Second Timer)
+**Exact Trigger Conditions:**
+- Image upload is completed successfully
+- User has NOT typed anything in any form field yet
+- Exactly 30 seconds have passed since upload completion
+
+**Detailed Auto-Save Behavior:**
+- System automatically creates a new draft entry containing the uploaded image
+- Console displays live countdown: "29... 28... 27..." down to "0" then "Draft saved"
+- Timer is visible in browser developer console for verification purposes
+- Draft gets saved to the system with current timestamp
+
+**Specific UI Updates After Auto-Save Completes:**
+1. **My Creative Snapshot Section:**
+   - "Last Updated" field displays current date and time (e.g., "Jan 28, 2025 3:45 PM")
+   
+2. **Action Bar:**
+   - "Last Draft Saved" field shows current timestamp
+   - "Time" field displays exact time when auto-save occurred
+
+#### Step 4: Subsequent Updates (After Initial Auto-Save)
+**Exact Trigger Conditions:**
+- A draft has already been auto-saved from the 30-second timer
+- User types in any text field, OR
+- User selects any dropdown option, OR
+- User uses AI auto-populate ("Fill blank fields" or "Overwrite"), OR
+- User makes any other form modifications
+
+**Detailed Update Behavior:**
+- System locates the existing draft (does NOT create a second draft)
+- Updates only the specific field values that were changed
+- Immediately refreshes timestamp displays in real-time:
+  - My Creative Snapshot → "Last Updated" shows new current time
+  - Action Bar → "Last Draft Saved at Time" shows new current time
+
+#### Step 5: AI Auto-populate Timer Reset
+**Specific Reset Scenarios:**
+- User clicks "Fill blank fields" button AND AI actually populates any fields
+- User clicks "Overwrite" button AND AI actually changes any existing values
+- Any field value changes as a result of AI action
+
+**Timer Reset Process:**
+- 30-second countdown immediately resets to 30 and starts over
+- Console shows new countdown: "30... 29... 28..." 
+- After new 30-second countdown completes, auto-save triggers again
+- Existing draft gets updated with the AI-populated values
+
+---
+
+## Drafts Page Integration
+
+### Draft Visibility Rules
+**Draft Appears in Drafts Page When:**
+- Auto-save has been triggered (30-second timer completed)
+- User has NOT completed the upload process on Single Upload page
+- Single Upload tab/session is still active but incomplete
+
+**Draft Removal from Drafts Page:**
+- When user completes the full upload process on Single Upload page
+- Draft is automatically removed from Drafts page upon successful upload completion
+- Applies even if Single Upload tab is still open after completion
+
+### Cross-Page Synchronization
+- Drafts page reflects real-time status of ongoing Single Upload sessions
+- Draft entries update automatically without page refresh
+- Draft removal happens immediately upon upload completion
+
+---
+
+## Single Upload System
+
+### Page Structure
+After image upload, user is directed to Single Upload page containing:
+- Sidebar (already implemented)
+- Form with multiple fields (already implemented)
+- AI integration capabilities (in development)
+
+### AI Auto-populate Functionality
+
+#### Current Implementation
+- AI reads data from JSON file (temporary solution)
+- Two main options available:
+  1. Fill blank fields
+  2. Overwrite existing fields
+- Both options have dedicated buttons (already implemented)
+
+#### Fill Blank Fields Process
+
+**Step 1: AI Image Analysis**
+- AI reads the uploaded image
+- Analyzes image content, copy text, and CTA elements
+- Processes visual and textual information to understand context
+
+**Step 2: Field Population Logic**
+- AI determines appropriate values for empty form fields only
+- Existing dropdown options are considered as potential matches
+- "Add new option" feature available for all dropdowns (existing but needs fixes)
+
+**Step 3: Synonym/Similar Value Detection**
+**When AI value is similar to existing dropdown:**
+- Small "Review" text appears below the field
+- Clicking "Review" opens modal with two options:
+  1. AI-generated value
+  2. Suggested value from tag glossary
+
+**Modal Interaction Results:**
+- **If AI value selected:**
+  - Value automatically added to dropdown
+  - Value added to tag glossary
+  - AI tag pill applied to field
+  
+- **If tag glossary value selected:**
+  - Existing value used (no new dropdown entry)
+  - No AI tag pill applied
+  
+- **If modal closed without selection + manual typing:**
+  - No AI tag pill applied (manual input)
+  - User's custom typed value used
+
+**Step 4: New Value Handling**
+**When AI value is completely new (no similar matches):**
+- Value directly added to field
+- AI tag pill automatically applied
+- *(Question: Should this also trigger review modal?)*
+- *(Question: When does new AI value save to tag glossary? After upload?)*
+
+#### Tag Management
+- **AI tag pill:** Applied when value comes from AI suggestions
+- **No AI tag:** Applied for tag glossary selections or manual input
+- Tag pills are existing components (no recreation needed)
+
+#### Overwrite Existing Fields Process
+
+**Pre-execution Confirmation:**
+- Before overwriting, display confirmation modal:
+  - "Are you sure you want to overwrite existing fields?"
+  - "This action cannot be undone"
+  - Options: "Confirm" / "Cancel"
+
+**Step 1-4: Same as Fill Blank Fields**
+- AI image analysis (identical process)
+- Field population logic (targets ALL fields, not just empty ones)
+- Synonym/similar value detection (same modal behavior)
+- New value handling (same AI tag pill logic)
+
+**Key Differences from Fill Blank Fields:**
+- Overwrites existing field values instead of skipping them
+- Requires user confirmation before execution
+- **Warning: Overwrite action is permanent and cannot be undone**
+
+### Manual Input Functionality
+
+#### Field Types & Add Feature
+**Single Dropdown Fields:**
+- User can select from existing options
+- "Add new option" feature available if desired value not in list
+- New values automatically saved to tag glossary
+
+**Multi-select Fields:**
+- User can select multiple existing options
+- "Add new option" feature available for each selection
+- New values automatically saved to tag glossary
+
+#### Spell Check Integration
+**Current Status:** Implemented but not functioning properly
+**Test Cases Needed:**
+1. **Common Misspellings:**
+   - "recieve" → "receive"
+   - "seperate" → "separate"
+   - "definately" → "definitely"
+
+2. **Industry-Specific Terms:**
+   - "convertion" → "conversion"
+   - "campain" → "campaign"
+   - "advertisment" → "advertisement"
+
+3. **Brand/Product Names:**
+   - Proper noun recognition
+   - Should NOT suggest corrections for legitimate brand names
+
+4. **Technical Terms:**
+   - Marketing terminology
+   - Platform-specific terms (Facebook, Instagram, etc.)
+
+5. **Edge Cases:**
+   - Numbers mixed with text
+   - Abbreviations and acronyms
+   - URLs and email addresses (should be ignored)
+
+### Form Validation & Upload Process
+
+#### Required Fields Validation
+- Required fields are pre-configured in Single Upload
+- **Preview and Upload buttons disabled** until all required fields completed
+- **Buttons become clickable** once validation requirements met
+
+#### Upload Flow
+**Step 1: Preview Modal**
+- Click "Preview" or "Upload" button (when enabled)
+- Modal opens displaying summary of all field values
+- Modal functionality already implemented
+
+**Step 2: Upload Execution**
+- User confirms upload from preview modal
+- **Draft Management:** Any associated drafts automatically removed from Drafts page
+- **Data Persistence:** Content saved to Firebase
+- **User Feedback:** Success toast notification displayed
+
+**Post-Upload State:**
+- Draft entry removed from system
+- User redirected or modal closed with success confirmation
+- Form reset for next upload (if applicable)
+
+### Console Logging
+- Countdown timer must be visible in browser console
+- Used for monitoring auto-save functionality
+- Helps verify 30-second timer is working correctly
+
+### Draft Management
+- Auto-save creates new draft entry initially
+- Subsequent changes update existing draft (no duplicate drafts)
+- All timestamps must reflect actual save/update times
+
+---
+
+## Pending Details
+*Additional functionality details to be added as provided*
+
+---
+
+## Development Notes
+- This document is the authoritative source for system functionality
+- Any feature requests not documented here require explicit approval
+- Updates to this document must be approved before implementation
+- Always reference this document when clarifying scope of work
