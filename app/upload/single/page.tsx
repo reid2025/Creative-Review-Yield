@@ -867,21 +867,21 @@ export default function SingleUploadPage() {
   const performAutoSave = async () => {
     
     if (hasTypedInField) {
-      console.log('❌ Auto-save skipped - user has typed in field')
+      // Auto-save skipped - user has typed in field
       return
     }
     
     if (!isOnline) {
-      console.log('❌ Auto-save skipped - offline')
+      // Auto-save skipped - offline
       return
     }
 
-    console.log('🔥 Starting auto-save process...')
+    // Starting auto-save process
     setIsSaving(true)
     
     try {
       const filename = form.getValues('creativeFilename')
-      console.log('📝 Form filename:', filename)
+      // Form filename ready
 
       const draftData: Partial<FirebaseDraftData> = {
         id: currentFirebaseDocId || undefined,
@@ -892,10 +892,10 @@ export default function SingleUploadPage() {
         aiPopulatedFields: Array.from(aiFieldsSet)
       }
 
-      console.log('📦 Auto-save draft data:', draftData)
+      // Auto-save draft data prepared
 
       const docId = await saveFirebaseDraft(draftData, uploadedImageFile || undefined)
-      console.log('🆔 Returned document ID:', docId)
+      // Document ID received
       
       if (docId) {
         setCurrentFirebaseDocId(docId)
@@ -904,9 +904,9 @@ export default function SingleUploadPage() {
         }
         setLastSaved(new Date())
         setHasChanges(false)
-        console.log('✅ Auto-save completed via Firebase - docId:', docId)
+        // Auto-save completed via Firebase
       } else {
-        console.log('❌ Auto-save failed - no document ID returned')
+        // Auto-save failed - no document ID returned
       }
     } catch (error) {
       console.error('❌ Firebase auto-save failed:', error)
@@ -934,7 +934,7 @@ export default function SingleUploadPage() {
 
       // Remove AI tag if user manually edits an AI-filled field (but not during AI populate)
       if (name && isFieldAIFilled(name) && !isAIPopulating) {
-        console.log('🗑️ Removing AI tag for field:', name, '(user edited)')
+        // Removing AI tag for field (user edited)
         removeAITag(name)
       }
 
@@ -1216,7 +1216,7 @@ export default function SingleUploadPage() {
                       size="sm"
                       variant="outline"
                       onClick={async () => {
-                        console.log('🧪 Manual test Firebase save triggered')
+                        // Manual test Firebase save triggered
                         await performAutoSave()
                       }}
                       className="text-purple-600 border-purple-300 hover:bg-purple-50"

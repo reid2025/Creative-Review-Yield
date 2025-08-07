@@ -43,11 +43,11 @@ export class FirebaseDraftService {
    */
   static async testConnection(): Promise<boolean> {
     try {
-      console.log('🔥 Testing Firebase connection...')
+      // Testing Firebase connection
       // Try to read from Firestore
       const q = query(collection(db, this.COLLECTION_NAME), where('isActive', '==', true))
       await getDocs(q)
-      console.log('✅ Firebase connection test successful')
+      // Firebase connection test successful
       return true
     } catch (error) {
       console.error('❌ Firebase connection test failed:', error)
@@ -56,39 +56,70 @@ export class FirebaseDraftService {
   }
 
   /**
+   * Clean object to remove undefined values (Firebase doesn't accept undefined)
+   */
+  private static cleanObject(obj: any): any {
+    if (obj === null || obj === undefined) {
+      return null
+    }
+    
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.cleanObject(item))
+    }
+    
+    if (typeof obj === 'object' && obj.constructor === Object) {
+      const cleaned: any = {}
+      for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+          const value = obj[key]
+          if (value !== undefined) {
+            cleaned[key] = this.cleanObject(value)
+          }
+        }
+      }
+      return cleaned
+    }
+    
+    return obj
+  }
+
+  /**
    * Save or update a draft in Firestore
    */
   static async saveDraft(data: Partial<FirebaseDraftData>, imageFile?: File): Promise<string> {
     try {
-      console.log('🔥 Firebase saveDraft called with data:', data)
+      // Saving draft to Firebase
       
-      // Clean the formData to remove non-serializable objects like File
-      const cleanFormData = { ...data.formData }
-      if (cleanFormData.uploadedImage) {
+      // Clean the formData to remove non-serializable objects like File and undefined values
+      const cleanFormData = this.cleanObject({ ...data.formData })
+      if (cleanFormData && cleanFormData.uploadedImage) {
         // Store only file metadata, not the actual File object
         const file = cleanFormData.uploadedImage as File
-        cleanFormData.uploadedImage = {
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          lastModified: file.lastModified,
-          isFileObject: true // Flag to identify this was a file
+        if (file && typeof file === 'object' && file.name) {
+          cleanFormData.uploadedImage = {
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            lastModified: file.lastModified,
+            isFileObject: true // Flag to identify this was a file
+          }
         }
       }
       
-      const draftData: Partial<FirebaseDraftData> = {
+      // Clean the entire draft data object to remove undefined values
+      const draftData = this.cleanObject({
         draftId: data.draftId || this.generateDraftId(),
         creativeFilename: data.creativeFilename || 'Untitled',
         lastSaved: serverTimestamp() as Timestamp,
         autoSaved: data.autoSaved || false,
-        formData: cleanFormData,
+        formData: cleanFormData || {},
         aiPopulatedFields: data.aiPopulatedFields || [],
         version: (data.version || 0) + 1,
         isActive: true,
         userId: data.userId || 'anonymous' // In production, use actual user ID
-      }
+      })
 
-      console.log('🔥 Prepared draft data for Firebase:', draftData)
+      // Prepared draft data for Firebase
 
       // Handle image upload if provided (skip if storage permission issues)
       if (imageFile) {
@@ -96,7 +127,7 @@ export class FirebaseDraftService {
           const imageData = await this.uploadImage(imageFile, draftData.draftId!)
           draftData.imageUrl = imageData.downloadUrl
           draftData.imageStoragePath = imageData.storagePath
-          console.log('✅ Image uploaded successfully')
+          // Image uploaded successfully
         } catch (imageError) {
           console.warn('⚠️ Image upload failed, continuing without image:', imageError)
           // Don't fail the entire draft save if image upload fails
@@ -105,20 +136,20 @@ export class FirebaseDraftService {
 
       // If draftId exists, update existing document
       if (data.id) {
-        console.log('🔥 Updating existing draft with ID:', data.id)
+        // Updating existing draft
         const draftRef = doc(db, this.COLLECTION_NAME, data.id)
         await updateDoc(draftRef, {
           ...draftData,
           lastSaved: serverTimestamp()
         })
-        console.log('✅ Draft updated successfully:', data.id)
+        // Draft updated successfully
         return data.id
       } else {
         // Create new draft
-        console.log('🔥 Creating new draft document')
+        // Creating new draft document
         draftData.createdAt = serverTimestamp() as Timestamp
         const docRef = await addDoc(collection(db, this.COLLECTION_NAME), draftData)
-        console.log('✅ New draft created with ID:', docRef.id)
+        // New draft created
         return docRef.id
       }
     } catch (error) {

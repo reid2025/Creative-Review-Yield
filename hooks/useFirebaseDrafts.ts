@@ -80,7 +80,7 @@ export const useFirebaseDrafts = (options: UseFirebaseDraftsOptions = {}): UseFi
   // Set up real-time listener or fetch drafts
   useEffect(() => {
     const initializeFirebase = async () => {
-      console.log('🚀 Initializing Firebase connection...')
+      // Initializing Firebase connection
       
       // Test Firebase connection first
       const connectionSuccess = await FirebaseDraftService.testConnection()
@@ -91,10 +91,10 @@ export const useFirebaseDrafts = (options: UseFirebaseDraftsOptions = {}): UseFi
       }
 
       if (enableRealTime && isOnline) {
-        console.log('🔥 Setting up real-time drafts listener')
+        // Setting up real-time drafts listener
         
         const unsubscribe = FirebaseDraftService.onDraftsChange(userId, (updatedDrafts) => {
-          console.log(`📡 Real-time update: ${updatedDrafts.length} drafts`)
+          // Real-time update received
           setDrafts(updatedDrafts)
           setLastSyncTime(new Date())
           setIsLoading(false)
@@ -104,7 +104,7 @@ export const useFirebaseDrafts = (options: UseFirebaseDraftsOptions = {}): UseFi
         unsubscribeRef.current = unsubscribe
         
         return () => {
-          console.log('🔥 Cleaning up real-time drafts listener')
+          // Cleaning up real-time drafts listener
           unsubscribe()
         }
       } else {
@@ -142,7 +142,7 @@ export const useFirebaseDrafts = (options: UseFirebaseDraftsOptions = {}): UseFi
       setDrafts(updatedDrafts)
       setLastSyncTime(new Date())
       
-      console.log(`📡 Manual refresh: ${updatedDrafts.length} drafts loaded`)
+      // Manual refresh completed
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load drafts'
       setError(errorMessage)
@@ -157,22 +157,20 @@ export const useFirebaseDrafts = (options: UseFirebaseDraftsOptions = {}): UseFi
     imageFile?: File
   ): Promise<string | null> => {
     if (!isOnline) {
-      console.log('❌ Cannot save draft - offline')
+      // Cannot save draft - offline
       toast.error('Cannot save draft - you are offline')
       return null
     }
 
     try {
-      console.log('💾 Hook: Starting save draft process')
-      console.log('💾 Draft data:', data)
+      // Starting save draft process
       
       // Add user ID to draft data
       const draftData = { ...data, userId }
-      console.log('💾 Draft data with userId:', draftData)
       
       const draftId = await FirebaseDraftService.saveDraft(draftData, imageFile)
       
-      console.log('✅ Hook: Draft saved with ID:', draftId)
+      // Draft saved successfully
       
       // Show success toast
       const isUpdate = Boolean(data.id)
@@ -195,12 +193,12 @@ export const useFirebaseDrafts = (options: UseFirebaseDraftsOptions = {}): UseFi
     }
 
     try {
-      console.log('🗑️ Deleting draft:', id)
+      // Deleting draft
       
       const success = await FirebaseDraftService.deleteDraft(id)
       
       if (success) {
-        console.log('✅ Draft deleted successfully')
+        // Draft deleted successfully
         toast.success('Draft deleted successfully')
         return true
       } else {
@@ -223,14 +221,14 @@ export const useFirebaseDrafts = (options: UseFirebaseDraftsOptions = {}): UseFi
     }
 
     try {
-      console.log('📄 Loading draft:', id)
+      // Loading draft
       
       const draft = await FirebaseDraftService.getDraft(id)
       
       if (draft) {
-        console.log('✅ Draft loaded:', draft.creativeFilename)
+        // Draft loaded successfully
       } else {
-        console.log('❌ Draft not found:', id)
+        // Draft not found
       }
       
       return draft
@@ -250,7 +248,7 @@ export const useFirebaseDrafts = (options: UseFirebaseDraftsOptions = {}): UseFi
     }
 
     saveTimeoutRef.current = setTimeout(async () => {
-      console.log('⏰ Auto-save triggered')
+      // Auto-save triggered
       await saveDraft({ ...data, autoSaved: true }, imageFile)
     }, 2000) // 2 second debounce
   }, [saveDraft])
