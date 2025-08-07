@@ -35,8 +35,8 @@ export interface FirebaseDraftData {
 }
 
 export class FirebaseDraftService {
-  private static readonly COLLECTION_NAME = 'drafts'
-  private static readonly STORAGE_PATH = 'draft-images'
+  private static readonly COLLECTION_NAME = 'creatives'
+  private static readonly STORAGE_PATH = 'creative-images'
 
   /**
    * Test Firebase connection
