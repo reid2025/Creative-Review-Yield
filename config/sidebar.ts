@@ -37,4 +37,9 @@ export const sidebarNavItems: SidebarNavItem[] = [
     icon: "006-history.png",
     href: "/takeaway-history",
   },
+  {
+    label: "Tag Glossary",
+    icon: "007-tag.png",
+    href: "/tag-glossary",
+  },
 ] 

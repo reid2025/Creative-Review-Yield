@@ -1,0 +1,1547 @@
+# System Functionality Documentation
+
+## Overview
+This document serves as the master reference for all system functionality. This must be consulted before any development work and explicitly referenced when determining if requested features are within scope.
+
+**IMPORTANT**: Do not modify any functionality described in this document without explicit approval. If new features are requested that are not documented here, flag them for review before implementation.
+
+---
+
+## Notification System - User Engagement & Team Collaboration
+
+### Strategy Sync & Takeaway Notifications
+- **New comments** on your saved takeaways
+- **@mentions** in takeaway comments or discussions  
+- **Takeaway approvals/rejections** (if approval workflow implemented)
+- **Someone uses your takeaway insights** in their own Strategy Sync
+
+### Creative & Upload Notifications
+- **Your creative becomes a "top performer"** (automated via API performance thresholds)
+- **Your uploaded creative gets pinned** to Strategy Sync by someone
+- **Your creative gets selected** for Strategy Sync analysis by team members
+- **Performance milestone alerts** (your creative hits cost/conversion goals via live data)
+- **Real-time performance changes** (CPC drops, conversion spikes from API updates)
+
+### Tag & System Notifications
+- **Your suggested tag gets approved** and added to glossary
+- **Someone uses a tag you created** in their uploads
+- **Tag you frequently use shows declining performance** (automated performance analysis)
+- **New high-performing tag discovered** in your litigation type
+
+### Team Collaboration Notifications
+- **Someone assigns you a task** from Strategy Sync recommendations
+- **Team member requests your input** on a creative or campaign
+- **Your expertise area gets mentioned** (if you're the "SA campaign expert")
+- **Someone shares a takeaway with you** specifically
+
+### Admin & System Notifications (For Admin Users)
+- **New user joins** and needs permission assignment
+- **User requests elevated permissions**
+- **System milestones** (100 uploads, 50 takeaways, etc.)
+- **Weekly team performance summaries**
+- **API connection issues** or data sync failures
+- **Daily backup success/failure** status reports
+
+### Achievement & Motivation Notifications
+- **Personal milestones** (10th upload, first Strategy Sync, high AI accuracy)
+- **Team celebrations** (group goals met, successful A/B tests)
+- **"Creative of the week"** recognition (automated via performance data)
+- **Consecutive days streak** (daily uploads, logins, etc.)
+
+### Performance-Driven Automated Notifications
+- **Top performer alerts** (automated threshold detection from live API data)
+- **Performance ranking changes** ("Your creative is now #1 in Personal Injury category")
+- **Optimization opportunities** ("Similar creative in different litigation performing 40% better")
+- **Budget efficiency alerts** ("This creative's CPC dropped 30% today")
+- **Trend notifications** (improving/declining performance patterns)
+
+### Notification Delivery Options
+**User-Controlled Preferences:**
+- **Real-time in-app notifications** (pop-ups and notification center)
+- **Email summaries** (daily digest, weekly reports, instant alerts)
+- **Push notifications** for mobile access (future enhancement)
+- **Slack integration** for team channels (optional)
+- **Custom notification thresholds** (set your own "top performer" criteria)
+
+---
+
+## User Authentication & Profile System
+
+### Authentication Requirements
+**Access Control:**
+- **All features require login** - no anonymous access to any part of the system
+- **Sign in/Sign up** already implemented (Firebase integration)
+- **Session management** to maintain user state across pages
+- **Automatic logout** after period of inactivity (security)
+
+### User Profile Management
+
+#### Profile Information Fields
+**Basic Profile Data:**
+- **Profile Photo:** Upload/change profile picture (with cropping tool)
+- **Username:** Editable display name (must be unique)
+- **Email Address:** Account email (verification required for changes)
+- **Full Name:** User's real name for team identification
+- **Role/Title:** Designer, Manager, Admin, etc. (admin-assignable)
+- **Department/Team:** Optional organizational grouping
+
+#### Advanced Profile Settings
+**Notification Preferences:**
+- **Email notifications** for Strategy Sync mentions, comments, takeaway updates
+- **In-app notifications** for team activity, system updates
+- **Daily digest** email with team activity summary
+- **Weekly performance** reports via email
+
+**Dashboard Preferences:**
+- **Default dashboard view** (which metrics to show first)
+- **Activity feed preferences** (which activities to highlight)
+- **Quick action shortcuts** customization
+- **Theme preferences** (light/dark mode, color schemes)
+
+#### Account Security
+**Security Settings:**
+- **Change password** functionality
+- **Two-factor authentication** setup (optional but recommended)
+- **Login history** showing recent sign-ins with timestamps and IP addresses
+- **Active sessions** management (logout from other devices)
+- **Account deletion** option with data export
+
+### User Role Management (Admin Functions)
+
+#### Permission Assignment Interface
+**Admin Control Panel:**
+- **User list** with current permissions displayed
+- **Role assignment** dropdown for each user
+- **Permission toggles** for granular control:
+  - View/Add/Edit/Delete for Tags
+  - Strategy Sync access
+  - Bulk operations permissions
+  - Admin panel access
+
+#### User Activity Monitoring
+**Admin Analytics:**
+- **User activity tracking** (uploads, Strategy Sync usage, tag additions)
+- **Performance metrics** per user (AI accuracy rates, contribution levels)
+- **Login frequency** and engagement metrics
+- **Permission usage** tracking (which features users actually use)
+
+### Profile Integration Across System
+
+#### Profile Display Throughout App
+**User Attribution:**
+- **Profile photos** in activity feeds and comments
+- **Username display** on uploaded creatives, takeaways, and comments
+- **User badges** showing role/expertise level
+- **"Created by" attribution** on all user-generated content
+
+#### Team Collaboration Features
+**Profile-Enhanced Collaboration:**
+- **@mention system** using usernames in comments and takeaways
+- **User activity status** (online/offline indicators)
+- **Direct messaging** between team members (optional future feature)
+- **Team member directory** with contact information and expertise areas
+
+### Profile Setup Flow
+
+#### First-Time User Experience
+**Onboarding Process:**
+1. **Complete profile setup** after first login
+2. **Upload profile photo** with guided cropping
+3. **Set notification preferences** with recommended defaults
+4. **Quick tour** of main features based on assigned role
+5. **Initial permissions assignment** by admin
+
+#### Profile Completion Incentives
+**Engagement Features:**
+- **Profile completion percentage** displayed prominently
+- **Team visibility boost** for complete profiles
+- **Enhanced collaboration** features unlocked with complete profile
+- **Better AI suggestions** with more complete user context
+
+### Technical Implementation Notes
+
+#### Profile Data Structure
+**Database Requirements:**
+```sql
+users_table:
+- user_id (primary key)
+- email (unique, required)
+- username (unique, required)
+- full_name
+- profile_photo_url
+- role
+- department
+- created_at
+- updated_at
+- last_login
+- is_active
+
+user_preferences:
+- user_id (foreign key)
+- email_notifications (boolean)
+- dashboard_layout (JSON)
+- theme_preference
+- notification_settings (JSON)
+```
+
+#### Profile Photo Management
+**Image Handling:**
+- **File upload** with size limits (max 5MB)
+- **Image cropping** tool for consistent aspect ratios
+- **Multiple sizes** generated (thumbnail, medium, large)
+- **CDN storage** for fast loading across the app
+- **Default avatars** for users without uploaded photos
+
+#### Security Considerations
+**Data Protection:**
+- **Profile data encryption** for sensitive information
+- **Privacy controls** for what information is visible to team
+- **GDPR compliance** for data export and deletion
+- **Audit logging** for profile changes and access
+
+---
+
+## Dashboard Page System
+
+### Purpose & Overview
+**Central hub** combining strategic performance metrics, trend analytics, team activity, and daily motivation features to provide comprehensive system overview and team collaboration.
+
+### Top Section: Key Performance Metrics
+
+#### Quick Stats Cards
+- **Total Creatives** uploaded this month vs last month (with percentage change indicator)
+- **Top Performing Litigation** based on recent performance metrics
+- **AI Efficiency Score** (percentage of fields auto-populated vs manual input)
+- **Strategy Sync Sessions** completed this week with success rate
+
+#### Performance Highlights
+- **Best Performing Creative** this month (with thumbnail and key metrics)
+- **Most Improved Campaign Type** (biggest performance increase trend)
+- **Cost Efficiency Leader** (lowest CPC/CPL this period with comparison)
+- **Rising Star Tag** (tag with biggest performance improvement)
+
+### Center Section: Trend Analytics
+
+#### Tag Trend Dashboard
+- **Rising Star Tags** (tags increasing in performance over time)
+- **Tag Usage Heatmap** by week/month showing adoption patterns
+- **Campaign Type Performance Trends** (line charts showing litigation performance evolution)
+- **Cross-Litigation Success Stories** ("Blue CTAs now working in 3 litigation types!")
+- **Tag Opportunity Alerts** (underused high-performing tags)
+
+#### Team Activity Feed (Real-Time)
+**Shows all team members' activity:**
+- **Strategy Sync completions:** "Seneca completed Strategy Sync analysis on 5 Ozempic creatives - 2 hours ago"
+- **Creative uploads:** "Michelle uploaded 3 new Personal Injury creatives to 'Miami Car Accident' - 4 hours ago"
+- **Tag additions:** "John added 'Urgency Red' to CTA Color tags - 6 hours ago"
+- **Takeaway saves:** "Sarah saved takeaway: 'Blue CTAs work better in IL campaigns' - 1 day ago"
+- **AI achievements:** "David's AI suggestions achieved 92% accuracy this week - 1 day ago"
+- **Team milestones:** "Team hit 100 uploads milestone! 🎯 - 2 days ago"
+
+**Activity Feed Features:**
+- **Real-time updates** without page refresh
+- **User avatars** and action icons for visual clarity
+- **Clickable items** to view details (go to takeaway, creative, etc.)
+- **Filter options** by activity type or team member
+- **"Load more"** for historical activity
+
+### Bottom Section: Team Motivation & Daily Vibes
+
+#### Daily Team Vibes Section 💪
+**Motivational Features:**
+- **Daily Note Input:** Text field for daily goals, wins, or team updates
+- **GIF Uploader:** Upload motivational/celebratory GIFs for team morale
+- **Quote of the Day:** Rotating inspirational quotes (editable by admin)
+- **Team Mood Tracker:** Simple emoji selector to track daily team energy
+- **Daily Goals:** Quick checklist for team objectives
+
+#### Celebration Corner 🎉
+**Team Achievement Highlights:**
+- **Recent Wins:** High-performing creatives from this week
+- **Team Achievements:** Upload milestones, successful A/B test implementations
+- **"Learning Moments":** Key insights from recent Strategy Sync sessions
+- **Performance Celebrations:** When team hits cost efficiency or conversion goals
+- **Innovation Highlights:** Creative new tag additions or successful cross-litigation tests
+
+**Celebration Features:**
+- **Achievement badges** for different milestones
+- **Team streak counters** (days of consistent uploads, AI accuracy, etc.)
+- **Monthly highlight reel** of biggest wins
+
+### Sidebar Widgets
+
+#### Quick Actions Panel
+- **"Start Strategy Sync"** button with current pinned creatives count
+- **"Quick Upload"** shortcut to Single Upload page
+- **"Check Takeaway History"** with unread/new takeaway count
+- **"Browse Creatives"** with recent filter presets
+- **"Manage Tags"** quick access to Tag Glossary
+
+#### System Health Monitor
+- **Active Drafts** count needing attention with direct links
+- **Recent AI Accuracy** ratio (applied vs ignored AI suggestions)
+- **Tag Glossary Activity** (new tags added this week)
+- **User Activity Status** (who's currently active/online)
+- **System Performance** indicators (upload speeds, processing times)
+
+### Dashboard Personalization
+- **Widget arrangement** customizable by user role
+- **Metric preferences** (focus on different KPIs per user)
+- **Activity feed filters** (show/hide certain types of activities)
+- **Notification preferences** for dashboard updates
+
+### Real-Time Features
+- **Live activity updates** without page refresh
+- **Real-time metric updates** as new data comes in
+- **Instant notifications** for team achievements
+- **Live collaboration indicators** (who's currently working on what)
+
+---
+
+## HIERARCHICAL PERFORMANCE ANALYTICS SYSTEM
+### (Developer Implementation Specification)
+
+### Data Structure Overview
+
+#### Two-Level Hierarchy Model
+```
+Campaign Type (Broad Category)
+└── Litigation Name (Specific Context/Market)
+
+Example Structure:
+├── SA (Sexual Abuse) [Campaign Type]
+│   ├── LA County SA [Litigation Name]
+│   ├── IL Juvie SA [Litigation Name]
+│   ├── TX Youth SA [Litigation Name]
+│   └── FL Adult SA [Litigation Name]
+├── Personal Injury [Campaign Type]
+│   ├── Car Accident - Miami [Litigation Name]
+│   ├── Slip & Fall - NYC [Litigation Name]
+│   └── Medical Malpractice - Chicago [Litigation Name]
+├── Mass Tort [Campaign Type]
+│   ├── Ozempic Campaign [Litigation Name]
+│   ├── Roundup Litigation [Litigation Name]
+│   └── Talcum Powder Cases [Litigation Name]
+```
+
+#### Database Schema Considerations
+**Creatives Table Fields:**
+- `campaign_type` (string) - Broad category (SA, Personal Injury, Mass Tort)
+- `litigation_name` (string) - Specific context (LA County SA, IL Juvie SA)
+- All other existing fields from Single Upload form
+
+**Tag Performance Analytics Requirements:**
+- Track tag performance at BOTH hierarchy levels
+- Store performance metrics by: tag + campaign_type + litigation_name combination
+- Enable roll-up analytics from litigation level to campaign type level
+
+### Performance Analytics Implementation
+
+#### Level 1: Campaign Type Analytics (Broad Insights)
+**Data Aggregation:**
+- Aggregate all litigation names under same campaign type
+- Calculate average performance metrics across all SA campaigns
+- Identify patterns that work across the entire category
+
+**Example Insights Generated:**
+- "Testimonial imagery performs 35% better across all SA campaigns"
+- "Blue CTAs have 22% higher conversion in SA campaign types"
+- "Urgency messaging decreases performance by 18% in SA categories"
+- "Question-based headlines work 40% better in Personal Injury campaign types"
+
+**Technical Requirements:**
+```sql
+-- Example query structure for campaign type analytics
+SELECT 
+    campaign_type,
+    tag_name,
+    AVG(cost_per_click) as avg_cpc,
+    AVG(cost_per_website_lead) as avg_cpl,
+    COUNT(*) as usage_count
+FROM creatives c
+JOIN creative_tags ct ON c.id = ct.creative_id
+WHERE campaign_type = 'SA'
+GROUP BY campaign_type, tag_name
+ORDER BY avg_cpl ASC
+```
+
+#### Level 2: Litigation-Specific Analytics (Granular Insights)
+**Data Granularity:**
+- Track performance for each specific litigation within campaign type
+- Identify jurisdiction/context-specific patterns
+- Enable cross-litigation comparison within same campaign type
+
+**Example Insights Generated:**
+- "Red CTAs work 25% better in IL Juvie SA vs LA County SA where blue CTAs perform better"
+- "Empathy-focused copy increases leads by 45% in LA County SA but decreases by 12% in IL Juvie SA"
+- "Legal disclaimer placement matters more in IL jurisdiction (15% impact) vs CA (3% impact)"
+- "Question headlines work in LA County SA (+30%) but not in IL Juvie SA (-8%)"
+
+**Technical Requirements:**
+```sql
+-- Example query for litigation-specific analytics
+SELECT 
+    campaign_type,
+    litigation_name,
+    tag_name,
+    AVG(cost_per_click) as avg_cpc,
+    AVG(cost_per_website_lead) as avg_cpl,
+    COUNT(*) as usage_count,
+    -- Calculate performance vs campaign type average
+    (AVG(cost_per_click) - campaign_type_avg.avg_cpc) as variance_from_category
+FROM creatives c
+JOIN creative_tags ct ON c.id = ct.creative_id
+JOIN (
+    SELECT campaign_type, AVG(cost_per_click) as avg_cpc
+    FROM creatives 
+    GROUP BY campaign_type
+) campaign_type_avg ON c.campaign_type = campaign_type_avg.campaign_type
+WHERE litigation_name = 'LA County SA'
+GROUP BY campaign_type, litigation_name, tag_name
+```
+
+### Strategy Sync Enhanced Analytics Integration
+
+#### Context-Aware Analysis Engine
+**When user selects creatives for Strategy Sync:**
+
+1. **Detect Context Patterns:**
+   - Identify all campaign types represented in selection
+   - Identify all litigation names represented in selection
+   - Calculate context distribution (e.g., 60% SA campaigns, 40% Personal Injury)
+
+2. **Generate Multi-Level Insights:**
+
+**Section A: Campaign Type Level Analysis**
+```
+"Based on your selected creatives, here are the Campaign Type insights:
+
+SA Campaign Analysis:
+• Testimonial imagery performs 35% better across SA campaigns
+• Soft color palettes (blues, greens) increase engagement by 22%
+• Avoid urgency messaging - decreases performance by 18%
+
+Personal Injury Analysis:
+• Question-based headlines increase conversion by 40%
+• Before/after imagery drives 28% more leads
+• Red CTAs outperform blue by 15% in PI campaigns"
+```
+
+**Section B: Litigation-Specific Analysis**
+```
+"Litigation-Specific Insights:
+
+LA County SA vs IL Juvie SA Comparison:
+• CTA Colors: Red performs 25% better in IL Juvie, Blue 30% better in LA County
+• Copy Tone: Empathy works in LA (+45% leads) but not IL (-12% leads)
+• Imagery: Professional photos work better in LA, illustrations in IL
+• Legal Language: IL requires 40% more disclaimer text than LA
+
+Cross-Litigation Opportunities:
+• "Confidential consultation" CTA from IL Juvie SA could be tested in TX Youth SA
+• Soft color scheme success in LA County SA suggests testing in FL Adult SA"
+```
+
+#### Technical Implementation for Strategy Sync
+
+**Algorithm Requirements:**
+1. **Context Detection Function:**
+```javascript
+function analyzeSelectionContext(selectedCreatives) {
+    const campaignTypes = [...new Set(selectedCreatives.map(c => c.campaign_type))];
+    const litigationNames = [...new Set(selectedCreatives.map(c => c.litigation_name))];
+    
+    return {
+        campaignTypes: campaignTypes,
+        litigationNames: litigationNames,
+        contextDistribution: calculateDistribution(selectedCreatives),
+        hasMultipleContexts: campaignTypes.length > 1 || litigationNames.length > 1
+    };
+}
+```
+
+2. **Performance Comparison Engine:**
+```javascript
+function generateContextualInsights(selectionContext) {
+    const insights = {
+        campaignTypeInsights: [],
+        litigationSpecificInsights: [],
+        crossLitigationOpportunities: []
+    };
+    
+    // Generate campaign type level insights
+    for (const campaignType of selectionContext.campaignTypes) {
+        insights.campaignTypeInsights.push(
+            await analyzeCampaignTypePerformance(campaignType)
+        );
+    }
+    
+    // Generate litigation specific insights
+    for (const litigationName of selectionContext.litigationNames) {
+        insights.litigationSpecificInsights.push(
+            await analyzeLitigationPerformance(litigationName)
+        );
+    }
+    
+    // Generate cross-litigation opportunities
+    if (selectionContext.litigationNames.length > 1) {
+        insights.crossLitigationOpportunities = 
+            await findCrossLitigationOpportunities(selectionContext.litigationNames);
+    }
+    
+    return insights;
+}
+```
+
+### Tag Glossary Enhanced Analytics
+
+#### Multi-Dimensional Tag Performance Matrix
+
+**Implementation Requirements:**
+
+1. **Tag Performance Database Structure:**
+```sql
+CREATE TABLE tag_performance_analytics (
+    id SERIAL PRIMARY KEY,
+    tag_name VARCHAR(255),
+    campaign_type VARCHAR(255),
+    litigation_name VARCHAR(255),
+    avg_cost_per_click DECIMAL(10,2),
+    avg_cost_per_lead DECIMAL(10,2),
+    total_spend DECIMAL(12,2),
+    usage_count INTEGER,
+    performance_percentile INTEGER,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+-- Indexes for performance
+CREATE INDEX idx_tag_campaign_type ON tag_performance_analytics(tag_name, campaign_type);
+CREATE INDEX idx_tag_litigation ON tag_performance_analytics(tag_name, litigation_name);
+CREATE INDEX idx_performance_lookup ON tag_performance_analytics(campaign_type, litigation_name);
+```
+
+2. **Analytics Dashboard Views:**
+
+**View A: Campaign Type Performance Matrix**
+```
+Tag Performance by Campaign Type:
+
+                 SA    Personal Injury    Mass Tort
+Blue CTA        85%        72%             91%
+Red CTA         65%        88%             73%
+Question Headlines 45%     78%             82%
+Testimonial     92%        65%             71%
+```
+
+**View B: Litigation Granular Matrix**
+```
+Tag Performance within SA Campaign Type:
+
+                LA County SA  IL Juvie SA  TX Youth SA  FL Adult SA
+Blue CTA           92%          67%          78%          85%
+Empathy Copy       88%          34%          72%          81%
+Soft Imagery       85%          91%          76%          79%
+Professional Photos 78%         45%          82%          88%
+```
+
+#### Cross-Litigation Learning Algorithm
+
+**Implementation for Opportunity Detection:**
+```javascript
+function findCrossLitigationOpportunities(campaignType) {
+    // Find high-performing tags in one litigation that are underused in others
+    const query = `
+        SELECT 
+            t1.tag_name,
+            t1.litigation_name as high_performer,
+            t2.litigation_name as opportunity_litigation,
+            t1.avg_cost_per_lead as high_performance,
+            t2.avg_cost_per_lead as current_performance,
+            (t1.avg_cost_per_lead - t2.avg_cost_per_lead) as potential_improvement
+        FROM tag_performance_analytics t1
+        JOIN tag_performance_analytics t2 ON t1.tag_name = t2.tag_name
+        WHERE t1.campaign_type = ? 
+        AND t2.campaign_type = ?
+        AND t1.performance_percentile > 80
+        AND t2.performance_percentile < 50
+        AND t1.litigation_name != t2.litigation_name
+        ORDER BY potential_improvement DESC
+    `;
+    
+    return executeQuery(query, [campaignType, campaignType]);
+}
+```
+
+### User Interface Requirements
+
+#### Strategy Sync Enhanced Display
+**UI Components Needed:**
+
+1. **Context Summary Card:**
+   - Show campaign types and litigation names in selection
+   - Display context distribution percentages
+   - Visual hierarchy indicator
+
+2. **Multi-Level Insights Sections:**
+   - Collapsible sections for Campaign Type vs Litigation insights
+   - Performance comparison charts
+   - Opportunity highlights with actionable recommendations
+
+3. **Cross-Reference Tools:**
+   - "Apply this insight to similar litigation" buttons
+   - "Test in other contexts" suggestion links
+   - Performance prediction for cross-application
+
+#### Tag Glossary Enhanced Interface
+**UI Requirements:**
+
+1. **Hierarchical Navigation:**
+   - Campaign Type dropdown filter
+   - Litigation Name sub-filter
+   - Performance view toggle (broad vs granular)
+
+2. **Performance Matrix Display:**
+   - Heatmap visualization for tag performance
+   - Drill-down capability from campaign type to litigation level
+   - Comparison tools for cross-litigation analysis
+
+3. **Opportunity Dashboard:**
+   - "High opportunity" tag recommendations
+   - "Test in new context" suggestions
+   - Performance prediction calculator
+
+### Data Pipeline and Processing
+
+#### Real-Time Analytics Updates
+**Requirements:**
+1. **Trigger-based updates** when new creatives added
+2. **Batch processing** for historical recalculation
+3. **Performance monitoring** to ensure analytics stay current
+4. **Data validation** to ensure hierarchy integrity
+
+#### Performance Optimization
+**Technical Considerations:**
+1. **Caching strategy** for frequently accessed analytics
+2. **Pre-calculated metrics** for common query patterns
+3. **Incremental updates** rather than full recalculation
+4. **Database partitioning** by campaign type for large datasets
+
+---
+
+## Tag Glossary Analytics & Data Intelligence
+
+### Context-Aware Tag Performance Analytics
+
+#### Multi-Dimensional Tag Analysis
+**Litigation-Specific Tag Performance:**
+- **Tag effectiveness by litigation:** Performance metrics for each tag broken down by litigation type
+- **Litigation-tag success matrix:** Visual grid showing which tags work best for which litigations
+- **Cross-litigation comparison:** "Urgency messaging works 40% better in Personal Injury vs Mass Tort"
+- **Litigation-specific ROI:** Cost and conversion metrics by tag within each litigation type
+
+**Campaign Type Tag Patterns:**
+- **Tag performance by campaign type:** Settlement vs Lead Gen vs Awareness campaign effectiveness
+- **Type-specific optimization insights:** "Question headlines perform best in Lead Gen campaigns"
+- **Campaign type evolution:** How tag effectiveness changes across different campaign types
+- **Cross-type opportunities:** Identify successful tags to test across campaign types
+
+#### Advanced Analytics Features
+
+**Performance Analytics by Context:**
+- **Average performance by tag + litigation:** Detailed metrics combining tag and litigation performance
+- **Top performing combinations:** Which tag combinations work best for specific litigation types
+- **Trend analysis:** Tag performance over time within specific litigation/campaign contexts
+- **Seasonal patterns:** Tag usage and effectiveness during different periods by litigation type
+
+**Strategic Insights Generation:**
+- **Context-specific recommendations:** "For Ozempic campaigns, try blue CTAs" vs "Wage claim campaigns perform better with testimonial imagery"
+- **Gap analysis:** Identify underused high-performing tags within specific litigation types
+- **Predictive analytics:** "Creatives with these tags in Personal Injury campaigns typically perform X%"
+- **Cross-pollination alerts:** "This tag combination works in Litigation A, consider testing in Litigation B"
+
+#### Enhanced Tag Glossary Dashboard
+
+**Multi-Level Analytics Display:**
+```
+Tag Performance Structure:
+├── Overall Performance (all creatives)
+├── By Litigation Name
+│   ├── Ozempic Campaign tag performance
+│   ├── Wage Claim tag effectiveness
+│   └── Personal Injury tag patterns
+└── By Campaign Type
+    ├── Lead Generation tag success rates
+    ├── Settlement Campaign tag performance
+    └── Awareness Campaign tag effectiveness
+```
+
+**Smart Recommendation Engine:**
+- **Litigation-aware suggestions:** Different tag recommendations based on litigation context
+- **Campaign type optimization:** Tailored suggestions for specific campaign types
+- **Performance prediction:** Context-specific performance forecasting
+- **A/B testing recommendations:** Suggest tag variations based on litigation/campaign type success patterns
+
+---
+
+## Takeaway History Page System
+
+### Purpose & Integration
+**Central repository** for all saved Strategy Sync analyses, enabling team collaboration, performance tracking, and strategic knowledge management across all creative campaigns.
+
+### Page Layout & Organization
+
+#### Main View Options
+- **Timeline View:** Chronological list of all takeaways (most recent first)
+- **Campaign View:** Organized by campaigns with takeaways grouped under each campaign
+- **Performance View:** Sorted by impact/results of implemented recommendations
+
+#### Takeaway Card Display Structure
+**Each saved takeaway displays:**
+- **Header Section:**
+  - Title/summary of analysis
+  - Date created and user attribution
+  - Implementation status badge
+- **Creatives Used:** Thumbnail gallery of all analyzed creatives
+- **Key Insights:** Top 3-5 condensed AI insights for quick reference
+- **User Takeaways:** Custom notes, conclusions, and strategic decisions
+- **Status Indicator:** Implementation status (Not Started, In Progress, Completed)
+- **Engagement Metrics:** Comment count and team interaction indicators
+
+### Advanced Features
+
+#### Search & Filtering System
+- **Full-text search** across takeaways, insights, comments, and notes
+- **Advanced filtering:**
+  - Date range selection
+  - Creator/user filter
+  - Campaign association
+  - Implementation status
+  - Performance impact level
+- **Tag system** for custom takeaway categorization
+- **Performance filters** (high-impact vs low-impact recommendations)
+- **Quick filters** for frequently used search combinations
+
+#### Team Collaboration Features
+- **Comment threads** on each takeaway for ongoing discussions
+- **@mentions** to notify and involve specific team members
+- **Status updates** for recommendation implementation progress
+- **Follow-up reminders** system for action items and deadlines
+- **Discussion history** preservation for knowledge continuity
+- **Notification system** for takeaway updates and team interactions
+
+#### Performance Tracking & Analytics
+- **Implementation tracking:** Monitor which recommendations were actually tested/implemented
+- **Results tracking:** Performance data collection from implemented suggestions
+- **ROI measurement:** Before/after metrics comparison for strategic impact
+- **Success rate analytics:** Analysis of which types of recommendations yield best results
+- **Trend analysis:** Performance patterns across multiple takeaways
+- **Impact scoring:** Quantitative assessment of takeaway value
+
+#### Organization & Management Features
+- **Favorites/Star system** for important takeaways quick access
+- **Archive functionality** for old/irrelevant takeaways (preserve but hide)
+- **Duplicate detection:** Automatic flagging of similar analyses to prevent redundancy
+- **Bulk operations:** Mass archive, tag, or export multiple takeaways
+- **Version history:** Track changes and updates to takeaways over time
+
+#### Export & Reporting Options
+- **Individual takeaway PDFs** with custom formatting
+- **Bulk export** for multiple takeaways
+- **Summary reports** across date ranges or campaigns
+- **Performance dashboards** showing implementation success rates
+- **Strategic insights compilation** for executive reporting
+
+### Integration Points
+- **Direct link** from Strategy Sync save functionality
+- **Cross-reference** with Creative and Campaign data
+- **Tag Glossary integration** for consistent terminology
+- **User permission system** alignment with overall tracker permissions
+
+---
+
+## Strategy Sync System
+
+### Purpose & Core Value
+**Primary Goal:** AI-powered creative analysis to extract strategic insights, identify patterns, and generate optimization recommendations from selected creatives.
+
+**Strategic Importance:** This is the core value feature of the entire tracker system - all other functionality feeds into enabling strategic analysis.
+
+### Creative Selection Methods
+
+#### Method 1: Direct Selection from Creatives Page
+- **Multi-select interface** from Table or Visual Grid view
+- **Minimum 3 creatives** required for meaningful AI analysis
+- **Drag & drop** selected creatives into Strategy Sync workspace
+- **Filter-based selection** (e.g., "All quiz layouts from Q1")
+
+#### Method 2: Strategy Queue (Pin System)
+- **"Pin to Strategy Sync" switch** in Single Upload form
+- **Quick Strategy Queue:** Collect important creatives while browsing
+- **Auto-suggest functionality:** System suggests pinned creatives when starting new Strategy Sync
+- **Queue management:** View/manage pinned creatives before analysis
+
+### AI Analysis Categories
+
+#### Pattern Recognition Analysis
+- **Common visual elements** (layouts, colors, imagery types, CTA positions)
+- **Messaging patterns** (copy angles, tones, headline structures)
+- **Performance correlations** (which visual/copy elements correlate with better metrics)
+- **Brand consistency evaluation** across selected creatives
+
+#### Strategic Insights Generation
+- **Why these creatives work together** (synergy analysis)
+- **Audience targeting alignment** across selections
+- **Litigation/Campaign type strategy coherence** evaluation
+- **Market positioning insights** based on creative patterns
+
+#### Context-Aware Tag Analytics Integration
+**Litigation-Specific Trend Analysis:**
+- **Tag performance by litigation type:** "Blue CTAs work great for Ozempic but poorly for Wage Claim campaigns"
+- **Litigation-specific recommendations:** Based on selected creatives' litigation types
+- **Cross-litigation insights:** "This combination works well in Personal Injury, consider testing in Mass Tort"
+
+**Campaign Type Pattern Recognition:**
+- **Campaign type optimization insights:** Settlement vs Lead Gen vs Awareness performance patterns
+- **Type-specific tag effectiveness:** "Question headlines perform 40% better in Lead Gen campaigns"
+- **Campaign type evolution trends:** What's currently working for each type
+
+**Contextual Recommendations Section:**
+- **Separate analysis section** alongside general AI insights
+- **"Based on your selected creatives' litigation types, here are the trends:"**
+- **Performance data specific** to the litigation/campaign types represented
+- **Cross-pollination opportunities:** Suggest successful elements from other similar campaigns
+
+#### Optimization Recommendations
+- **A/B testing suggestions** based on current performance data
+- **Copy variations** to test (headlines, CTAs, body copy)
+- **Visual element optimizations** (CTA colors, positions, imagery changes)
+- **New creative concepts** inspired by successful patterns
+- **Performance improvement opportunities** with specific recommendations
+
+#### Performance Deep-Dive Analysis
+- **ROI analysis** across all selected creatives
+- **Best/worst performers** with detailed explanations
+- **Trend analysis** (improving/declining performance over time)
+- **Metric correlations** (spend vs performance, timing vs results)
+- **Current metrics snapshot** (captured at time of analysis)
+
+### Strategy Sync Workflow
+
+#### Step 1: Creative Collection
+- Select creatives via multi-select or use pinned queue
+- Minimum 3 creatives required
+- System displays selection summary with key metadata
+
+#### Step 2: AI Analysis Execution
+- AI processes selected creatives across all analysis categories
+- Real-time analysis progress indicator
+- Comprehensive insights generation
+
+#### Step 3: Review & Takeaway Creation
+- **User reviews AI analysis** and insights
+- **User adds custom takeaways/notes** based on analysis
+- **Strategic decisions** documented
+- **Action items** identified
+
+#### Step 4: Save to Takeaway History
+- **Save analysis** with:
+  - Selected creatives used
+  - AI-generated insights
+  - User takeaways and notes
+  - Current metrics snapshot (at time of analysis)
+  - Timestamp and user attribution
+- **Automatic organization** by date, campaign, or custom tags
+
+### Takeaway History Integration
+- **All saved Strategy Sync analyses** stored chronologically
+- **Comment system** on saved takeaways for team discussion
+- **Search functionality** across historical takeaways
+- **Performance tracking** of implemented recommendations
+
+### Export Functionality
+- **Custom PDF report generation** for strategy presentations
+- **Customizable PDF templates** with branding
+- **Include/exclude** specific analysis sections
+- **Professional formatting** for client/stakeholder sharing
+
+### Notes Integration System
+
+#### Creative-Level Notes
+- **Individual creative insights** attached to specific creatives
+- **Performance observations** for single creatives
+- **Design feedback** and optimization notes
+- **Accessible** from creative detail view and Strategy Sync
+
+#### Campaign-Level Notes
+- **Campaign strategy documentation** across multiple creatives
+- **Campaign performance insights** and learnings
+- **Strategic direction** for entire campaigns
+- **Cross-creative patterns** within campaigns
+
+---
+
+## Creatives Page System
+
+### Page Structure - Dual View Tabs
+**Tab 1:** Table View (Data Analysis)
+**Tab 2:** Visual Grid View (Creative Discovery)
+
+### Tab 1: Table View (Data Analysis Focus)
+
+#### Purpose & Use Cases
+- Detailed filtering and data analysis
+- Performance analysis and reporting
+- Bulk operations and data management
+- Detailed metadata review
+
+#### Primary Filters (Data Analysis Focus)
+- **Date Range** (Start Date, End Date, Date Added)
+- **Performance Metrics** (Amount Spent, Cost Per Click, Cost Per Website Lead)
+- **Campaign Data** (Litigation Name, Designer, Campaign Type)
+- **Status Indicators** (Marked as Top Ad?, Optimization?)
+
+#### Secondary Filters
+- **Copy & Messaging** (Copy Angle, Copy Tone, Audience Persona)
+- **Text Fields** (search in Headline Text, Body Copy Summary)
+- **Conversion Elements** (Campaign Trigger, conditions/stats/emotional mentions)
+
+#### Table Features
+- **Sortable columns** for all Single Upload fields
+- **Advanced filtering** with multiple criteria combinations
+- **Export functionality** (CSV, Excel)
+- **Bulk actions** (edit tags, delete, bulk operations)
+- **Performance metrics** prominently displayed
+- **Pagination** for large datasets
+
+**Example Use Case:** *"Show me all high-performing ads from Q1 with emotional statements that cost under $2 CPC"*
+
+### Tab 2: Visual Grid View (Creative Discovery Focus)
+
+#### Purpose & Use Cases
+- Visual browsing and creative inspiration
+- Finding creative patterns and layouts
+- Visual filtering for design elements
+- Creative discovery and pattern recognition
+
+#### Primary Visual Filters (Creative Discovery Focus)
+- **Creative Layout Type** (quiz, banner, card, etc.)
+- **Imagery Type** (photos, illustrations, graphics, etc.)
+- **Imagery Background** (colors, patterns, styles)
+- **Icons Used?** (toggle filter)
+- **Client Branding?** (toggle filter)
+
+#### Secondary Visual Filters
+- **CTA Elements** (CTA Color, CTA Position, CTA Style Group)
+- **Headline Elements** (Question-Based Headline?, Headline Tags)
+- **Visual Indicators** (Legal Language Present?, Disclaimer Added?)
+
+#### Visual Grid Features
+- **Pinterest-style masonry grid** of creative thumbnails
+- **Visual filtering panels** on sidebar
+- **Hover effects** showing key metadata overlay
+- **Quick preview modal** on click
+- **Visual search** - "Show me more like this" functionality
+- **Smart grouping** - cluster similar layouts together
+- **Color-coded tags** for quick visual identification
+- **Performance indicators** (small badges for top performers)
+- **Infinite scroll** for smooth browsing experience
+
+**Example Use Case:** *"Show me all quiz-style layouts with icons that use blue CTAs"*
+
+### Enhanced Creatives → Strategy Sync Flow
+
+#### Seamless Selection Experience
+
+**Multi-Select with Action Bar (Recommended Approach):**
+- **Checkbox selection** available on each creative in both Table & Visual views
+- **Persistent selection** across tab switching (Table ↔ Visual)
+- **Floating action bar** appears when 3+ creatives selected
+- **Selection counter** shows "X creatives selected"
+- **"Send to Strategy Sync"** prominent button in action bar
+- **"Clear Selection"** option to reset
+- **Selection preview** showing thumbnails of selected creatives
+
+**Filter Persistence Handling:**
+- **Selection Lock System:** Once creatives selected, selections persist regardless of view changes
+- **Smart Filter Translation:** Show warning when switching to view without compatible filters
+- **Selection Breadcrumb:** "Showing X selected creatives (from Table filters)" 
+- **Unlock Selection** option to apply new filters and reset selection
+
+#### Enhanced Selection Tools
+
+**Smart Selection Shortcuts:**
+- **"Select All Filtered Results"** button (respects current filters)
+- **"Select Top Performers"** (auto-select highest performing creatives)
+- **"Select Recent Uploads"** (automatically select last 30 days)
+- **"Select by Campaign"** (all creatives from specific campaign dropdown)
+- **"Select Similar to This"** option on individual creatives
+
+**Quick Analysis Options:**
+- **"Quick Analyze"** button for immediate Strategy Sync redirect
+- **"Add to Collection"** for building custom creative groups
+- **"Compare Similar"** (AI suggests related creatives for analysis)
+- **"Continue Previous Analysis"** if returning to incomplete Strategy Sync session
+
+#### Visual Flow Enhancements
+
+**Table View Selection Features:**
+- **Row checkbox** selection with shift-click for range selection
+- **Header checkbox** for select all on current page
+- **Selection highlighting** with visual indicators
+- **Bulk actions dropdown** (beyond just Strategy Sync)
+
+**Visual Grid Selection Features:**
+- **Checkbox overlay** appears on hover over each creative
+- **Visual selection indicators** (highlighted borders, selection badges)
+- **"Add Similar"** button appears on hover for each creative
+- **Batch selection** by drag-to-select multiple creatives
+- **Selection overlay** showing count and quick actions
+
+#### Strategy Sync Integration
+
+**Workflow Integration:**
+- **"Analyze These"** floating button prominently displayed when selection made
+- **Strategy Sync preview modal** showing selected creatives before transition
+- **Selection summary** with key metadata before analysis
+- **"Modify Selection"** option before proceeding to analysis
+- **Seamless transition** maintaining creative context and selection state
+
+#### Cross-Tab Functionality
+- **Shared filter state** - switch tabs without losing active filters
+- **Filter breadcrumbs** clearly show all active filters
+- **Save filter presets** for common search patterns
+- **Filter persistence** across browser sessions
+
+#### Filter Management
+- **Reset all filters** option
+- **Filter combination logic** (AND/OR operations)
+- **Filter suggestions** based on current selection
+- **Quick filter shortcuts** for common combinations
+
+---
+
+## Tag Glossary System
+
+### Tag Glossary Page Structure
+- Accessible via sidebar navigation
+- Displays all tags from across the system organized by field categories
+- Shows tag usage statistics (number of creatives using each tag)
+
+### Tag Display & Organization
+**Tag Categories:**
+- Tags grouped by field type (e.g., "CTA Verb", "Copy Angle", "Campaign Name", etc.)
+- Each tag shows:
+  - Tag name
+  - Number of creatives using this tag
+  - Source indicator (AI-generated vs manually added)
+  - Last used date
+
+### Tag Interaction Features
+
+#### View Creatives by Tag
+**Click on any tag:**
+- Opens detailed view showing all creatives that use this specific tag
+- Creative list displays:
+  - Thumbnail of creative image
+  - Creative filename
+  - Campaign name
+  - Date added
+  - Other relevant metadata
+- **Filtering options:** Sort by date, campaign, designer, etc.
+- **Export functionality:** Export list of creatives with this tag
+
+#### Tag Management (CRUD Operations)
+
+**Add New Tag:**
+- Manual add button for each field category
+- Input field with validation
+- Automatically adds to appropriate dropdown in Single Upload
+
+**Update/Edit Tag:**
+- Click edit icon next to tag name
+- Rename tag with validation (no duplicates)
+- **Impact:** Updates all existing creatives using this tag
+- **Confirmation required:** "This will update X creatives using this tag"
+
+**Delete Tag - Replace with Alternative Approach:**
+**When deleting a tag that's linked to existing creatives:**
+
+1. **Deletion Warning Modal:**
+   - "This tag is used by X creatives. Choose how to proceed:"
+   - Show count of affected creatives
+   - Display thumbnail previews of affected creatives
+
+2. **Replacement Options:**
+   - **Option A:** "Replace with existing tag" 
+     - Dropdown showing similar/related tags in same field category
+     - User selects replacement tag
+     - All X creatives updated with new tag
+     - Old tag deleted from glossary
+   
+   - **Option B:** "Remove tag entirely"
+     - Remove tag from glossary only
+     - Existing creative values become "orphaned" (preserved but no longer in dropdown)
+     - Warning: "This tag will no longer be available for future uploads"
+
+3. **Confirmation Required:**
+   - "This action will update X creatives. This cannot be undone."
+   - Final confirmation before execution
+
+**Benefits:**
+- Preserves all creative data
+- Maintains data integrity through replacement tags  
+- Provides user control over the process
+- Cleans up glossary effectively
+
+### Tag Management Permissions System
+
+#### Admin Controls (Your Role)
+**Full Permission Management:**
+- Assign specific permissions to any user
+- Override any user's permission settings
+- View all permission assignments
+- Access to user management dashboard
+
+#### Granular Permission Types
+**Available Permissions per User:**
+- **View Tags:** See all tags and associated creatives
+- **Add New Tags:** Create new tags in any field category
+- **Edit Existing Tags:** Rename/modify tags (affects all linked creatives)
+- **Delete Tags:** Remove tags with replacement/orphan options
+- **Manage Tag Permissions:** Assign tag permissions to other users (admin-level)
+
+#### Permission Assignment Examples
+```
+Designer A: View ✓, Add ✓, Edit ✗, Delete ✗
+Designer B: View ✓, Add ✓, Edit ✓, Delete ✓  
+Manager C: View ✓, Add ✓, Edit ✓, Delete ✗
+Admin (You): All permissions ✓
+```
+
+#### Permission Enforcement
+- **UI-Level:** Users only see actions they're permitted to perform
+- **System-Level:** Backend validates permissions before executing actions
+- **Audit Trail:** Log all tag management actions with user attribution
+- **No AI/Manual Distinction:** Same permissions apply regardless of tag source
+
+### Tag Statistics & Analytics
+- **Most used tags** across all creatives
+- **Recent additions** to glossary
+- **Unused tags** (in glossary but not applied to any creatives)
+- **AI vs Manual** tag breakdown statistics
+
+---
+
+## URL Structure & Multi-Tab Management
+
+### URL Structure
+- **New Upload:** `/upload-image`
+- **After Image Upload:** `/upload-image/[timestamp]` 
+  - Where timestamp = Unix timestamp when image was first uploaded
+  - Example: `/upload-image/1706123456789`
+- **Draft Editing:** `/upload-image/[timestamp]`
+  - Same timestamp-based URL structure for consistency
+
+### Multi-Tab Conflict Prevention
+**Tab Detection Logic:**
+- System tracks which draft timestamps are currently open in active tabs
+- When user attempts to open a draft that's already active in another tab
+- Display warning modal: "This draft is already open in another tab"
+- User must close the other tab before proceeding
+- Prevention approach avoids data conflicts and sync complexity
+
+**Benefits:**
+- Timestamp ensures uniqueness even with duplicate filenames
+- Prevention method is simple and prevents data loss
+- Clear user feedback about tab conflicts
+
+---
+
+## Upload System
+
+### Navigation
+- Upload functionality is accessible via sidebar
+- Upload page contains two main options:
+  1. Single Upload
+  2. Bulk Upload *(details pending)*
+
+### Single Upload Flow
+
+#### Step 1: Upload Page Access
+- User navigates to Upload page from sidebar
+- User selects "Single Upload" option
+- System redirects to Single Upload page with upload field
+
+#### Step 2: Image Upload
+- **File Type**: Image files only (first implementation phase)
+- Upload field allows single image selection
+- Upon successful upload, image is processed and ready for further steps
+
+#### Image Display & Interaction
+- **Zoom Feature**: Image must have zoom functionality available at all times while filling the form
+- Zoom feature allows users to inspect image details while completing form fields
+- Zoom controls remain accessible throughout the entire form completion process
+
+#### Step 3: Auto-Save to Drafts (30-Second Timer)
+**Initial Auto-Save Trigger Conditions:**
+- Image upload is completed successfully
+- User has NOT typed anything in any form field yet
+- Exactly 30 seconds have passed since upload completion
+
+**Ongoing Auto-Save Trigger Conditions (Multiple saves per session):**
+- User stops interacting with any field for exactly 30 seconds
+- Timer resets every time user:
+  - Types in any text field
+  - Selects any dropdown option
+  - Uses AI auto-populate ("Fill blank fields" or "Overwrite")
+  - Makes any other form modifications
+- After 30 seconds of inactivity, draft automatically updates
+
+**Detailed Auto-Save Behavior:**
+- **First auto-save:** System creates a new draft entry containing the uploaded image
+- **Subsequent auto-saves:** System updates the existing draft (does NOT create duplicate drafts)
+- Console displays live countdown: "29... 28... 27..." down to "0" then "Draft saved"
+- Timer is visible in browser developer console for verification purposes
+- Draft gets saved/updated to the system with current timestamp
+
+**Specific UI Updates After Each Auto-Save:**
+1. **My Creative Snapshot Section:**
+   - "Last Updated" field displays current date and time (e.g., "Jan 28, 2025 3:45 PM")
+   
+2. **Action Bar:**
+   - "Last Draft Saved" field shows current timestamp
+   - "Time" field displays exact time when auto-save occurred
+
+#### Step 4: Subsequent Updates (After Initial Auto-Save)
+**Exact Trigger Conditions:**
+- User interacts with any form element (typing, selecting, AI auto-populate)
+- 30-second inactivity timer automatically resets
+- After exactly 30 seconds of no user interaction, auto-save triggers
+
+**Detailed Update Behavior:**
+- System locates the existing draft (does NOT create a second draft)
+- Updates only the specific field values that were changed since last save
+- Immediately refreshes timestamp displays in real-time:
+  - My Creative Snapshot → "Last Updated" shows new current time
+  - Action Bar → "Last Draft Saved at Time" shows new current time
+
+#### Step 5: AI Auto-populate Timer Reset
+**Specific Reset Scenarios:**
+- User clicks "Fill blank fields" button AND AI actually populates any fields
+- User clicks "Overwrite" button AND AI actually changes any existing values
+- Any field value changes as a result of AI action
+
+**Timer Reset Process:**
+- 30-second countdown immediately resets to 30 and starts over
+- Console shows new countdown: "30... 29... 28..." 
+- After new 30-second countdown completes (if no further user interaction), auto-save triggers again
+- Existing draft gets updated with the AI-populated values
+
+---
+
+## Drafts Page Integration
+
+### Draft Visibility Rules
+**Draft Appears in Drafts Page When:**
+- Auto-save has been triggered (30-second timer completed)
+- User has NOT completed the upload process on Single Upload page
+- Single Upload tab/session is still active but incomplete
+
+**Draft Removal from Drafts Page:**
+- When user completes the full upload process on Single Upload page
+- Draft is automatically removed from Drafts page upon successful upload completion
+- Applies even if Single Upload tab is still open after completion
+
+### Cross-Page Synchronization
+- Drafts page reflects real-time status of ongoing Single Upload sessions
+- Draft entries update automatically without page refresh
+- Draft removal happens immediately upon upload completion
+
+---
+
+## Single Upload System
+
+### Page Structure
+After image upload, user is directed to Single Upload page containing:
+- Sidebar (already implemented)
+- Form with multiple fields (already implemented)
+- AI integration capabilities (in development)
+
+### Form Fields Reference
+
+#### CATEGORY: Metadata & Campaign Info
+- **IMAGE** - Image Field
+- **DATE ADDED TO SHEET** - Date Field
+- **DESIGNER** - Single Dropdown / Add Feature
+- **START DATE** - Date Field
+- **END DATE** - Date Field
+- **CREATIVE FILENAME** - Text Field 
+- **LITIGATION NAME** - Single Dropdown / Add Feature
+- **CAMPAIGN TYPE** - Single Dropdown / Add Feature
+- **MARKED AS A TOP AD?** - Switch
+- **OPTIMIZATION?** - Switch
+
+#### CATEGORY: Performance Metrics
+- **AMOUNT SPENT** - Number Field
+- **COST PER WEBSITE LEAD** - Number Field
+- **COST PER CLICK** - Number Field
+
+#### CATEGORY: Message & Targeting Insights
+- **CREATIVE LAYOUT TYPE** - Single Dropdown / Add Feature
+- **IMAGERY TYPE** - MultiSelect Dropdown / Add Feature
+- **IMAGERY BACKGROUND** - MultiSelect Dropdown / Add Feature
+- **MESSAGING STRUCTURE** - Single Dropdown / Add Feature
+- **QUESTION-BASED HEADLINE?** - Switch
+- **CLIENT BRANDING?** - Switch
+- **ICONS USED?** - Switch
+
+#### CATEGORY: Headline & CTA Details
+- **PREHEADLINE TEXT** - Text Field
+- **HEADLINE TEXT** - Text Field 
+- **HEADLINE TAGS** - MultiSelect Dropdown / Add Feature
+- **HEADLINE INTENT** - MultiSelect Dropdown / Add Feature
+- **CTA LABEL** - Text Field
+- **CTA VERB** - Single Dropdown / Add Feature
+- **CTA STYLE GROUP** - Single Dropdown / Add Feature
+- **CTA COLOR** - Single Dropdown / Add Feature
+- **CTA POSITION** - Single Dropdown / Add Feature
+
+#### CATEGORY: Copy & Conversion Drivers
+- **BODY COPY SUMMARY** - Text Field
+- **COPY ANGLE** - MultiSelect Dropdown / Add Feature
+- **COPY TONE** - MultiSelect Dropdown / Add Feature
+- **AUDIENCE PERSONA** - Single Dropdown / Add Feature
+- **CONDITIONS LISTED?** - Switch
+- **CAMPAIGN TRIGGER** - Single Dropdown / Add Feature
+- **LEGAL LANGUAGE PRESENT?** - Switch
+- **STAT MENTIONED?** - Switch
+- **EMOTIONAL STATEMENT PRESENT?** - Switch
+- **DISCLAIMER ADDED?** - Switch
+- **$ AMOUNT MENTIONED?** - Switch
+
+#### CATEGORY: Additional
+- **DESIGNER REMARKS** - Textarea
+- **INTERNAL NOTES** - Textarea
+- **UPLOAD GOOGLE DOC LINK** - Textarea
+- **PIN NOTE FOR STRATEGY SYNC** - Switch
+
+**Pin to Strategy Sync Functionality:**
+- **Strategy Queue:** Collect important creatives while browsing for future analysis
+- **Auto-suggest:** System suggests pinned creatives when starting new Strategy Sync session
+- **Quick Collection:** Allows users to mark creatives of interest without immediate analysis
+
+**Note:** BODY COPY SUMMARY field type needs confirmation - Text Field or Textarea?
+
+### AI Auto-populate Functionality
+
+#### Current Implementation
+- AI reads data from JSON file (temporary solution)
+- Two main options available:
+  1. Fill blank fields
+  2. Overwrite existing fields
+- Both options have dedicated buttons (already implemented)
+
+#### Fill Blank Fields Process
+
+**Step 1: AI Image Analysis**
+- AI reads the uploaded image
+- Analyzes image content, copy text, and CTA elements
+- Processes visual and textual information to understand context
+
+**Step 2: Field Population Logic**
+- AI determines appropriate values for empty form fields only
+- Existing dropdown options are considered as potential matches
+- "Add new option" feature available for all dropdowns (existing but needs fixes)
+
+**Step 3: Synonym/Similar Value Detection & Review Process**
+**When AI value is similar to existing dropdown:**
+- Small "Review" text appears below the field
+- Clicking "Review" opens modal with two options:
+  1. AI-generated value
+  2. Suggested value from tag glossary
+
+**Modal Interaction Results:**
+- **If AI value selected:**
+  - Value automatically added to dropdown as permanent option
+  - Value added to tag glossary for future use across all uploads
+  - AI tag pill applied to field
+  
+- **If tag glossary value selected:**
+  - Existing value used (no new dropdown entry)
+  - No AI tag pill applied
+  
+- **If modal closed without selection + manual typing:**
+  - No AI tag pill applied (manual input)
+  - User's custom typed value used
+
+**Similarity Detection Criteria:**
+- Spelling variations (e.g., "optimization" vs "optimisation")
+- Synonyms (e.g., "button" vs "CTA")
+- Abbreviations vs full terms (e.g., "CPC" vs "Cost Per Click")
+- Case variations (e.g., "facebook" vs "Facebook")
+
+**Step 4: New Value Handling**
+**When AI value is completely new (no similar matches):**
+- Value directly added to field
+- AI tag pill automatically applied
+- *(Question: Should this also trigger review modal?)*
+- *(Question: When does new AI value save to tag glossary? After upload?)*
+
+#### Tag Management
+- **AI tag pill:** Applied when value comes from AI suggestions (existing component)
+- **No AI tag:** Applied for tag glossary selections or manual input
+- **Tag Persistence:** All AI-selected values become permanent dropdown options stored in tag glossary
+- **Cross-Upload Availability:** Tag glossary values available across all future Single Upload sessions
+- Tag pills are existing components (no recreation needed)
+
+#### Overwrite Existing Fields Process
+
+**Pre-execution Confirmation:**
+- Before overwriting, display confirmation modal:
+  - "Are you sure you want to overwrite existing fields?"
+  - "This action cannot be undone"
+  - Options: "Confirm" / "Cancel"
+
+**Step 1-4: Same as Fill Blank Fields**
+- AI image analysis (identical process)
+- Field population logic (targets ALL fields, not just empty ones)
+- Synonym/similar value detection (same modal behavior)
+- New value handling (same AI tag pill logic)
+
+**Key Differences from Fill Blank Fields:**
+- Overwrites existing field values instead of skipping them
+- Requires user confirmation before execution
+- **Warning: Overwrite action is permanent and cannot be undone**
+
+### Manual Input Functionality
+
+#### Field Types & Add Feature
+**Single Dropdown Fields:**
+- User can select from existing options
+- "Add new option" feature available if desired value not in list
+- New values automatically saved to tag glossary
+
+**Multi-select Fields:**
+- User can select multiple existing options
+- "Add new option" feature available for each selection
+- New values automatically saved to tag glossary
+
+#### Spell Check Integration
+**Current Status:** Implemented but not functioning properly
+
+**Test Cases for Marketing/Advertising Industry:**
+
+1. **Common Campaign Misspellings:**
+   - "campain" → "campaign"
+   - "advertisment" → "advertisement"
+   - "promtion" → "promotion"
+   - "convertion" → "conversion"
+   - "audiance" → "audience"
+   - "strategey" → "strategy"
+
+2. **CTA & Copy Misspellings:**
+   - "guarentee" → "guarantee"
+   - "recieve" → "receive"
+   - "seperate" → "separate"
+   - "definately" → "definitely"
+   - "occassion" → "occasion"
+   - "recomend" → "recommend"
+
+3. **Platform & Technical Terms:**
+   - "Facebok" → "Facebook"
+   - "Instagra" → "Instagram"
+   - "YouTub" → "YouTube"
+   - "Googl" → "Google"
+   - "analystics" → "analytics"
+   - "optmization" → "optimization"
+
+4. **Marketing Industry Terms:**
+   - "branding" (should NOT be corrected)
+   - "retargeting" (should NOT be corrected)
+   - "lookalike" (should NOT be corrected)
+   - "clickthrough" → "click-through"
+   - "costper" → "cost per"
+   - "calltoaction" → "call-to-action"
+
+5. **Creative & Design Terms:**
+   - "headlin" → "headline"
+   - "copywritting" → "copywriting"
+   - "typograhy" → "typography"
+   - "imagry" → "imagery"
+   - "bannr" → "banner"
+   - "creativ" → "creative"
+
+6. **Legal & Compliance Terms:**
+   - "disclamer" → "disclaimer"
+   - "litigaton" → "litigation"
+   - "complianc" → "compliance"
+   - "regulaton" → "regulation"
+   - "approva" → "approval"
+
+7. **Edge Cases (Should NOT be corrected):**
+   - Brand names and trademarked terms
+   - URLs and email addresses
+   - Phone numbers and tracking codes
+   - Abbreviations and acronyms (CTA, CPC, CPL, etc.)
+   - Technical IDs and filenames
+
+### Form Validation & Upload Process
+
+#### Required Fields Validation
+**Required Fields (Must be completed for form submission):**
+- **DESIGNER** - Single Dropdown / Add Feature
+- **START DATE** - Date Field
+- **END DATE** - Date Field
+- **CREATIVE FILENAME** - Text Field 
+- **LITIGATION NAME** - Single Dropdown / Add Feature
+- **CAMPAIGN TYPE** - Single Dropdown / Add Feature
+- **AMOUNT SPENT** - Number Field
+- **COST PER WEBSITE LEAD** - Number Field
+- **COST PER CLICK** - Number Field
+
+- **Preview and Upload buttons disabled** until all required fields completed
+- **Buttons become clickable** once validation requirements met
+
+#### Upload Flow
+**Step 1: Preview Modal**
+- Click "Preview" or "Upload" button (when enabled)
+- Modal opens displaying summary of all field values
+- Modal functionality already implemented
+
+**Step 2: Upload Execution**
+- User confirms upload from preview modal
+- **Draft Management:** Any associated drafts automatically removed from Drafts page
+- **Data Persistence:** Content saved to Firebase
+- **User Feedback:** Success toast notification displayed
+
+**Post-Upload State:**
+- Draft entry removed from system
+- User redirected or modal closed with success confirmation
+- Form reset for next upload (if applicable)
+
+### Console Logging
+- Countdown timer must be visible in browser console
+- Used for monitoring auto-save functionality
+- Helps verify 30-second timer is working correctly
+
+### Draft Management
+- Auto-save creates new draft entry initially (with timestamp-based ID)
+- Subsequent changes update existing draft (no duplicate drafts)
+- All timestamps must reflect actual save/update times
+- **AI Tag Persistence:** AI tag pills are saved as part of draft data
+- **Tag State Preservation:** When draft is reopened, all AI tags remain visible
+- **Complete Field State:** Draft maintains both field values and their source indicators (AI vs manual)
+
+---
+
+## Pending Details
+*Additional functionality details to be added as provided*
+
+---
+
+## Development Notes
+- This document is the authoritative source for system functionality
+- Any feature requests not documented here require explicit approval
+- Updates to this document must be approved before implementation
+- Always reference this document when clarifying scope of work
