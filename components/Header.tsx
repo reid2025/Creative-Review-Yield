@@ -56,7 +56,6 @@ function HeaderBreadcrumbs({ pageTitle }: { pageTitle?: string }) {
     ? ['upload'] 
     : segments
   
-  const _displayTitle = pageTitle || getDefaultPageTitle()
   
   return (
     <Breadcrumb>

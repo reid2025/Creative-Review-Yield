@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRY Application - ERD Diagram</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 600;
+        }
+        .subtitle {
+            margin-top: 10px;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        .content {
+            padding: 40px;
+        }
+        .diagram-container {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 2px solid #e9ecef;
+        }
+        .legend {
+            background: #fff;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+        .legend h3 {
+            color: #495057;
+            margin-top: 0;
+        }
+        .legend-item {
+            display: inline-block;
+            margin: 10px 20px 10px 0;
+        }
+        .legend-symbol {
+            display: inline-block;
+            width: 30px;
+            height: 3px;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        .one-to-many { background: #28a745; }
+        .many-to-many { background: #ffc107; }
+        .section-title {
+            color: #495057;
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 10px;
+            margin: 30px 0 20px 0;
+        }
+        .mermaid {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Creative Review Yield (CRY)</h1>
+            <div class="subtitle">Database Entity Relationship Diagram - Current Implementation</div>
+        </div>
+        
+        <div class="content">
+            <h2 class="section-title">Complete Database Schema</h2>
+            
+            <div class="diagram-container">
+                <div class="mermaid">
+                    erDiagram
+                        USERS ||--o{ CREATIVES : "creates/owns"
+                        USERS ||--o{ TAGS : "creates"
+                        CREATIVES }o--|| TAGS : "uses"
+                        
+                        USERS {
+                            string uid PK "Firebase Auth ID"
+                            string email UK "Unique email"
+                            string username "Display name"
+                            string createdAt "ISO date string"
+                        }
+                        
+                        CREATIVES {
+                            string draftId UK "Unique draft ID"
+                            string creativeFilename "File name"
+                            timestamp lastSaved "serverTimestamp"
+                            timestamp createdAt "serverTimestamp"
+                            boolean autoSaved "Auto-save flag"
+                            object formData "All form fields"
+                            array aiPopulatedFields "AI fields"
+                            number version "Version number"
+                            boolean isActive "Soft delete"
+                            string userId FK "Owner or anonymous"
+                            string imageUrl "Storage URL optional"
+                            string imageStoragePath "Storage path optional"
+                        }
+                        
+                        TAGS {
+                            string id PK "Doc ID (not stored as a field)"
+                            string value "Tag value"
+                            string label "Display label"
+                            string fieldName "Form field"
+                            string createdBy FK "Creator ID"
+                            timestamp createdAt "Creation time"
+                            timestamp updatedAt "Last modified"
+                        }
+                </div>
+            </div>
+
+            <h2 class="section-title">Detailed formData Structure</h2>
+            
+            <div class="diagram-container">
+                <div class="mermaid">
+                    graph TD
+                        A[formData Object] --> B[Metadata Section]
+                        A --> C[Performance Metrics]
+                        A --> D[Creative Details]
+                        A --> E[Headline & CTA]
+                        A --> F[Copy & Audience]
+                        A --> G[Boolean Flags]
+                        
+                        B --> B1["dateAdded: string"]
+                        B --> B2["designer: string"]
+                        B --> B3["startDate: string"]
+                        B --> B4["endDate: string"]
+                        B --> B5["litigationName: string"]
+                        B --> B6["campaignType: string"]
+                         B --> B7["campaignName: string"]
+                         B --> B8["uploadedImage?: { name, size, type, lastModified, isFileObject }"]
+                        
+                        C --> C1["amountSpent: string"]
+                        C --> C2["costPerWebsiteLead: string"]
+                        C --> C3["costPerClick: string"]
+                        
+                        D --> D1["creativeLayoutType: string"]
+                        D --> D2["imageryType: string[]"]
+                        D --> D3["imageryBackground: string[]"]
+                        D --> D4["messagingStructure: string"]
+                        
+                        E --> E1["preheadlineText: string"]
+                        E --> E2["headlineText: string"]
+                        E --> E3["headlineTags: string[]"]
+                        E --> E4["headlineIntent: string[]"]
+                        E --> E5["ctaLabel: string"]
+                        E --> E6["ctaVerb: string"]
+                        E --> E7["ctaStyleGroup: string"]
+                        E --> E8["ctaColor: string"]
+                        E --> E9["ctaPosition: string"]
+                        
+                        F --> F1["copyAngle: string[]"]
+                        F --> F2["copyTone: string[]"]
+                        F --> F3["audiencePersona: string"]
+                        F --> F4["campaignTrigger: string"]
+                        
+                        G --> G1["questionBasedHeadline: boolean"]
+                        G --> G2["clientBranding: boolean"]
+                        G --> G3["iconsUsed: boolean"]
+                        G --> G4["markedAsTopAd: boolean"]
+                        G --> G5["needsOptimization: boolean"]
+                        
+                        style A fill:#f9f,stroke:#333,stroke-width:4px
+                        style B fill:#e6f3ff,stroke:#333,stroke-width:2px
+                        style C fill:#ffe6e6,stroke:#333,stroke-width:2px
+                        style D fill:#e6ffe6,stroke:#333,stroke-width:2px
+                        style E fill:#ffffe6,stroke:#333,stroke-width:2px
+                        style F fill:#f0e6ff,stroke:#333,stroke-width:2px
+                        style G fill:#ffe6f0,stroke:#333,stroke-width:2px
+                </div>
+            </div>
+
+            <h2 class="section-title">Complete formData Fields</h2>
+            <div style="background: #f8f9fa; border-radius: 10px; padding: 20px; margin: 20px 0;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #667eea; color: white;">
+                            <th style="padding: 10px; text-align: left;">Category</th>
+                            <th style="padding: 10px; text-align: left;">Field Name</th>
+                            <th style="padding: 10px; text-align: left;">Type</th>
+                            <th style="padding: 10px; text-align: left;">Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="background: #e6f3ff;"><td colspan="4" style="padding: 8px; font-weight: bold;">📋 Metadata</td></tr>
+                        <tr><td></td><td>dateAdded</td><td>string</td><td>Date creative was added</td></tr>
+                        <tr><td></td><td>designer</td><td>string</td><td>Designer name/ID</td></tr>
+                        <tr><td></td><td>startDate</td><td>string</td><td>Campaign start date</td></tr>
+                        <tr><td></td><td>endDate</td><td>string</td><td>Campaign end date</td></tr>
+                        <tr><td></td><td>litigationName</td><td>string</td><td>Litigation/case name</td></tr>
+                        <tr><td></td><td>campaignType</td><td>string</td><td>Type of campaign</td></tr>
+                        <tr><td></td><td>campaignName</td><td>string</td><td>Campaign name</td></tr>
+                        
+                        <tr style="background: #ffe6e6;"><td colspan="4" style="padding: 8px; font-weight: bold;">💰 Performance Metrics</td></tr>
+                        <tr><td></td><td>amountSpent</td><td>string</td><td>Total spend amount</td></tr>
+                        <tr><td></td><td>costPerWebsiteLead</td><td>string</td><td>Cost per lead</td></tr>
+                        <tr><td></td><td>costPerClick</td><td>string</td><td>Cost per click</td></tr>
+                        
+                        <tr style="background: #e6ffe6;"><td colspan="4" style="padding: 8px; font-weight: bold;">🎨 Creative Details</td></tr>
+                        <tr><td></td><td>creativeLayoutType</td><td>string</td><td>Layout type</td></tr>
+                        <tr><td></td><td>imageryType</td><td>string[]</td><td>Types of imagery used</td></tr>
+                        <tr><td></td><td>imageryBackground</td><td>string[]</td><td>Background styles</td></tr>
+                        <tr><td></td><td>messagingStructure</td><td>string</td><td>Message structure</td></tr>
+                        
+                        <tr style="background: #ffffe6;"><td colspan="4" style="padding: 8px; font-weight: bold;">📝 Headline & CTA</td></tr>
+                        <tr><td></td><td>preheadlineText</td><td>string</td><td>Pre-headline text</td></tr>
+                        <tr><td></td><td>headlineText</td><td>string</td><td>Main headline</td></tr>
+                        <tr><td></td><td>headlineTags</td><td>string[]</td><td>Headline tags</td></tr>
+                        <tr><td></td><td>headlineIntent</td><td>string[]</td><td>Headline intent</td></tr>
+                        <tr><td></td><td>ctaLabel</td><td>string</td><td>CTA button text</td></tr>
+                        <tr><td></td><td>ctaVerb</td><td>string</td><td>CTA action verb</td></tr>
+                        <tr><td></td><td>ctaStyleGroup</td><td>string</td><td>CTA style</td></tr>
+                        <tr><td></td><td>ctaColor</td><td>string</td><td>CTA color</td></tr>
+                        <tr><td></td><td>ctaPosition</td><td>string</td><td>CTA position</td></tr>
+                        
+                        <tr style="background: #f0e6ff;"><td colspan="4" style="padding: 8px; font-weight: bold;">✍️ Copy & Audience</td></tr>
+                        <tr><td></td><td>copyAngle</td><td>string[]</td><td>Copy approach angles</td></tr>
+                        <tr><td></td><td>copyTone</td><td>string[]</td><td>Copy tone of voice</td></tr>
+                        <tr><td></td><td>audiencePersona</td><td>string</td><td>Target audience</td></tr>
+                        <tr><td></td><td>campaignTrigger</td><td>string</td><td>Campaign trigger event</td></tr>
+                        
+                        <tr style="background: #ffe6f0;"><td colspan="4" style="padding: 8px; font-weight: bold;">🏴 Boolean Flags</td></tr>
+                        <tr><td></td><td>questionBasedHeadline</td><td>boolean</td><td>Is headline a question?</td></tr>
+                        <tr><td></td><td>clientBranding</td><td>boolean</td><td>Has client branding?</td></tr>
+                        <tr><td></td><td>iconsUsed</td><td>boolean</td><td>Are icons used?</td></tr>
+                        <tr><td></td><td>markedAsTopAd</td><td>boolean</td><td>Is top performing ad?</td></tr>
+                        <tr><td></td><td>needsOptimization</td><td>boolean</td><td>Needs optimization?</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h2 class="section-title">Firebase Storage Structure</h2>
+            
+            <div class="diagram-container">
+                <div class="mermaid">
+                    graph TD
+                        ROOT[creative-images/] --> DRAFT["{draftId}/"]
+                        DRAFT --> IMG1["image1.jpg"]
+                        DRAFT --> IMG2["image2.png"]
+                        DRAFT --> IMG3["image3.webp"]
+                        
+                        style ROOT fill:#f9f,stroke:#333,stroke-width:4px
+                        style USER fill:#bbf,stroke:#333,stroke-width:2px
+                        style DRAFT fill:#bfb,stroke:#333,stroke-width:2px
+                </div>
+            </div>
+
+            <h2 class="section-title">Data Flow Diagram</h2>
+            
+            <div class="diagram-container">
+                <div class="mermaid">
+                    sequenceDiagram
+                        participant U as User
+                        participant F as Frontend
+                        participant FS as Firestore
+                        participant S as Storage
+                        participant T as Tags Service
+                        
+                        U->>F: Upload Creative
+                        F->>S: Upload Image
+                        S-->>F: Image URL
+                        F->>T: Fetch Tags
+                        T-->>F: Available Tags
+                        U->>F: Fill Form
+                        F->>FS: Save Creative
+                        FS-->>F: Document ID
+                        F->>T: Update Tag Usage
+                        T-->>F: Success
+                        
+                        Note over F,FS: Auto-save every 30s
+                        loop Every 30 seconds
+                            F->>FS: Update Draft
+                        end
+                </div>
+            </div>
+
+            <div class="legend">
+                <h3>Relationship Legend</h3>
+                <div class="legend-item">
+                    <span class="one-to-many legend-symbol"></span>
+                    <span>One-to-Many Relationship</span>
+                </div>
+                <div class="legend-item">
+                    <span class="many-to-many legend-symbol"></span>
+                    <span>Many-to-Many Relationship</span>
+                </div>
+            </div>
+
+            <h2 class="section-title">Key Features</h2>
+            <ul>
+                <li><strong>Real-time Sync:</strong> All data changes are synchronized in real-time using Firestore listeners</li>
+                <li><strong>Auto-save:</strong> Drafts are automatically saved every 30 seconds</li>
+                <li><strong>Soft Deletes:</strong> Creatives use soft delete (isActive flag), Tags are permanently deleted</li>
+                <li><strong>Version Control:</strong> Each creative has a version number for tracking changes</li>
+                <li><strong>Tag Management:</strong> Reusable tags organized by field categories</li>
+                <li><strong>AI Integration:</strong> Track which fields were populated by AI</li>
+                <li><strong>Authentication:</strong> Uses Firebase Auth with minimal user data in Firestore</li>
+            </ul>
+
+            <h2 class="section-title">Current Implementation Status</h2>
+            <ul>
+                <li>✅ <strong>Users Collection:</strong> Simplified structure with only essential fields (uid, email, username, createdAt as ISO string)</li>
+                <li>✅ <strong>Creatives Collection:</strong> Fully implemented with:
+                    <ul>
+                        <li>No 'id' field stored (uses Firestore document ID)</li>
+                        <li>Automatic timestamp generation using serverTimestamp()</li>
+                        <li>FormData cleaned to remove undefined values and File objects</li>
+                        <li>Version tracking and soft delete</li>
+                        <li>Optional image upload with separate Storage handling</li>
+                    </ul>
+                </li>
+                <li>✅ <strong>Tags Collection:</strong> Implemented without usage tracking (removed usageCount field)</li>
+                <li>✅ <strong>Firebase Auth:</strong> Integrated for user authentication</li>
+                <li>✅ <strong>Firebase Storage:</strong> Configured for image uploads with user-based organization</li>
+                <li>⚠️ <strong>Security Rules:</strong> Basic rules in place, recommended rules documented but not yet applied</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            themeVariables: {
+                primaryColor: '#667eea',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#764ba2',
+                lineColor: '#5a67d8',
+                secondaryColor: '#f7fafc',
+                tertiaryColor: '#fff'
+            }
+        });
+    </script>
+</body>
+</html>

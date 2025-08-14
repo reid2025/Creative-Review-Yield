@@ -30,21 +30,27 @@ export default function LoginPage() {
       await signIn(email, password)
       console.log('✅ Sign in successful, redirecting to /upload/single')
       router.push('/upload/single')
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ Sign in error:', error)
       
-      if (error.code === 'auth/configuration-not-found') {
-        setError('Firebase Authentication is not configured. Please enable Email/Password authentication in Firebase Console.')
-      } else if (error.code === 'auth/user-not-found') {
-        setError('No account found with this email address')
-      } else if (error.code === 'auth/wrong-password') {
-        setError('Incorrect password')
-      } else if (error.code === 'auth/invalid-email') {
-        setError('Invalid email address')
-      } else if (error.code === 'auth/invalid-credential') {
-        setError('Invalid email or password')
+      if (error && typeof error === 'object' && 'code' in error) {
+        if (error.code === 'auth/configuration-not-found') {
+          setError('Firebase Authentication is not configured. Please enable Email/Password authentication in Firebase Console.')
+        } else if (error.code === 'auth/user-not-found') {
+          setError('No account found with this email address')
+        } else if (error.code === 'auth/wrong-password') {
+          setError('Incorrect password')
+        } else if (error.code === 'auth/invalid-email') {
+          setError('Invalid email address')
+        } else if (error.code === 'auth/invalid-credential') {
+          setError('Invalid email or password')
+        } else {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+          setError(`Failed to sign in: ${errorMessage}`)
+        }
       } else {
-        setError(`Failed to sign in: ${error.message || 'Unknown error'}`)
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        setError(`Failed to sign in: ${errorMessage}`)
       }
     } finally {
       setLoading(false)
@@ -107,7 +113,7 @@ export default function LoginPage() {
               )}
             </Button>
             <p className="text-sm text-center text-gray-600 dark:text-gray-400">
-              Don't have an account?{' '}
+              Don&apos;t have an account?{' '}
               <Link 
                 href="/register" 
                 className="font-medium text-primary hover:underline"

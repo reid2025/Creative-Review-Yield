@@ -45,17 +45,21 @@ export default function RegisterPage() {
     try {
       await signUp(email, password, username)
       router.push('/upload/single')
-    } catch (error: any) {
-      if (error.message && error.message.includes('Authentication is not enabled')) {
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'code' in error) {
+        if (error.code === 'auth/configuration-not-found') {
+          setError('Firebase Authentication is not configured. Please enable Email/Password authentication in your Firebase Console.')
+        } else if (error.code === 'auth/email-already-in-use') {
+          setError('An account with this email already exists')
+        } else if (error.code === 'auth/invalid-email') {
+          setError('Invalid email address')
+        } else if (error.code === 'auth/weak-password') {
+          setError('Password is too weak. Please use a stronger password')
+        } else {
+          setError('Failed to create account. Please try again.')
+        }
+      } else if (error instanceof Error && error.message.includes('Authentication is not enabled')) {
         setError(error.message)
-      } else if (error.code === 'auth/configuration-not-found') {
-        setError('Firebase Authentication is not configured. Please enable Email/Password authentication in your Firebase Console.')
-      } else if (error.code === 'auth/email-already-in-use') {
-        setError('An account with this email already exists')
-      } else if (error.code === 'auth/invalid-email') {
-        setError('Invalid email address')
-      } else if (error.code === 'auth/weak-password') {
-        setError('Password is too weak. Please use a stronger password')
       } else {
         setError('Failed to create account. Please try again.')
       }

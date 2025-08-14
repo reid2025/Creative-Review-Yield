@@ -4,13 +4,12 @@ import {
   doc, 
   addDoc, 
   updateDoc, 
-  deleteDoc, 
+ 
   getDocs, 
   getDoc,
   onSnapshot,
   query,
   where,
-  orderBy,
   Timestamp,
   serverTimestamp
 } from 'firebase/firestore'
@@ -24,7 +23,7 @@ export interface FirebaseDraftData {
   lastSaved: Timestamp
   createdAt: Timestamp
   autoSaved?: boolean
-  formData: any
+  formData: Record<string, unknown>
   imageUrl?: string
   imageStoragePath?: string
   userId?: string
@@ -58,7 +57,7 @@ export class FirebaseDraftService {
   /**
    * Clean object to remove undefined values (Firebase doesn't accept undefined)
    */
-  private static cleanObject(obj: any): any {
+  private static cleanObject(obj: unknown): unknown {
     if (obj === null || obj === undefined) {
       return null
     }
@@ -67,11 +66,12 @@ export class FirebaseDraftService {
       return obj.map(item => this.cleanObject(item))
     }
     
-    if (typeof obj === 'object' && obj.constructor === Object) {
-      const cleaned: any = {}
-      for (const key in obj) {
-        if (obj.hasOwnProperty(key)) {
-          const value = obj[key]
+    if (typeof obj === 'object' && obj !== null && obj.constructor === Object) {
+      const cleaned: Record<string, unknown> = {}
+      const objRecord = obj as Record<string, unknown>
+      for (const key in objRecord) {
+        if (Object.prototype.hasOwnProperty.call(objRecord, key)) {
+          const value = objRecord[key]
           if (value !== undefined) {
             cleaned[key] = this.cleanObject(value)
           }

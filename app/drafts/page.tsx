@@ -4,14 +4,15 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, FileText, User, Play, Trash2, Image, Cloud, CloudOff, Wifi, WifiOff, RefreshCw } from "lucide-react"
-import { DraftStorageV2, DraftDataV2 } from "@/utils/draftStorage.v2"
+import { Calendar, FileText, User, Play, Trash2, Image, Cloud, CloudOff, RefreshCw } from "lucide-react"
+import { DraftStorageV2 } from "@/utils/draftStorage.v2"
 import { useFirebaseDrafts } from "@/hooks/useFirebaseDrafts"
 import { FirebaseDraftData } from "@/lib/firebase-draft-service"
 import { PageContainer, PageHeader } from "@/components/layout/PageContainer"
-import { AITag } from "@/components/upload/AITag"
+// Removed unused import - AITag component
 import { toast } from "sonner"
 import Link from "next/link"
+import NextImage from "next/image"
 
 export default function DraftsPage() {
   // Firebase drafts integration with real-time updates
@@ -21,7 +22,6 @@ export default function DraftsPage() {
     deleteDraft: deleteFirebaseDraft,
     refreshDrafts,
     isOnline,
-    lastSyncTime,
     trackingStats,
     error
   } = useFirebaseDrafts({ enableRealTime: true })
@@ -73,7 +73,7 @@ export default function DraftsPage() {
         minute: '2-digit',
         hour12: true 
       })
-    } catch (_error) {
+    } catch {
       return 'Unknown date'
     }
   }
@@ -218,14 +218,16 @@ export default function DraftsPage() {
                     <div className="flex-shrink-0">
                       <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
                         {draft.imageUrl ? (
-                          <img 
+                          <NextImage 
                             src={draft.imageUrl} 
                             alt={draft.creativeFilename || 'Draft image'}
                             className="w-full h-full object-cover"
+                            width={80}
+                            height={80}
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-400">
-                            <Image className="w-8 h-8" />
+                            <Image className="w-8 h-8" alt="" />
                           </div>
                         )}
                       </div>
@@ -242,7 +244,9 @@ export default function DraftsPage() {
                             <span className="text-xs text-gray-600 px-2 py-1 bg-purple-100 rounded">
                               {fieldName}
                             </span>
-                            <AITag />
+                            <Badge variant="secondary" className="text-xs px-1 py-0 bg-gradient-to-r from-purple-500 to-blue-500 text-white">
+                              AI
+                            </Badge>
                           </div>
                         ))}
                         {draft.aiPopulatedFields.length > 5 && (

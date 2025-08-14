@@ -88,9 +88,9 @@ export default function FirebaseTestPage() {
           <div className="text-sm text-gray-600 mt-4">
             <p><strong>Instructions:</strong></p>
             <ol className="list-decimal list-inside space-y-1">
-              <li>Click "Test Connection" first to verify Firebase is connected</li>
-              <li>Click "Test Save Draft" to create a test draft in Firestore</li>
-              <li>Click "Get All Drafts" to see if the draft was saved</li>
+              <li>Click &ldquo;Test Connection&rdquo; first to verify Firebase is connected</li>
+              <li>Click &ldquo;Test Save Draft&rdquo; to create a test draft in Firestore</li>
+              <li>Click &ldquo;Get All Drafts&rdquo; to see if the draft was saved</li>
               <li>Check Firebase Console &gt; Firestore Database &gt; drafts collection to see data</li>
             </ol>
           </div>

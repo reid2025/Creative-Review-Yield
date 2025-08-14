@@ -1,766 +1,902 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { useForm, FormProvider } from 'react-hook-form'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { useRouter } from 'next/navigation'
+import NextImage from 'next/image'
 import { useDropzone } from 'react-dropzone'
-import { Upload, X, Save, FileText, Sparkles, Image as ImageIcon, ZoomIn, ZoomOut, Wifi, WifiOff, Cloud, CloudOff } from 'lucide-react'
+import { Upload, Sparkles, ChevronDown, Search, Plus, Check, X } from 'lucide-react'
 import { format, addDays } from 'date-fns'
-import { DraftStorageV2 } from '@/utils/draftStorage.v2'
 import { useAIFields } from '@/hooks/useAIFields'
 import { useFirebaseDrafts } from '@/hooks/useFirebaseDrafts'
 import { FirebaseDraftData } from '@/lib/firebase-draft-service'
+import { firebaseAIService } from '@/lib/firebase-ai-service'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { useAuth } from '@/contexts/AuthContext'
+import { AIStatusIndicator } from '@/components/ai/AIStatusIndicator'
+import { useTagOptions } from '@/hooks/useTagOptions'
+import { toast } from 'sonner'
 
 // shadcn/ui components
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { toast } from 'sonner'
-
-
-// Custom form components
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
-  FormInput,
-  FormSelect,
-  FormTextarea,
-  FormSwitch,
-  FormGrid,
-} from '@/components/input'
-
-// Common reusable components
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
-  FormCardSection,
-  FormDialog,
-  FormDropdown
-} from '@/components/common'
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import { Checkbox } from '@/components/ui/checkbox'
 
 // Form validation schema
 const formSchema = z.object({
-  // File & Image
   uploadedImage: z.any().nullable(),
   skipImage: z.boolean().default(false),
-
-  // Metadata Section
+  
+  // Metadata
   creativeFilename: z.string().min(1, 'Filename is required'),
   dateAdded: z.string(),
   designer: z.string().min(1, 'Designer is required'),
   startDate: z.string().min(1, 'Start date is required'),
   endDate: z.string().min(1, 'End date is required'),
-  campaignName: z.string().optional(),
-
+  litigationName: z.string().min(1, 'Litigation Name is required'),
+  campaignType: z.string().min(1, 'Campaign Type is required'),
+  
   // Performance Metrics
-  spend: z.string().optional(),
-  revenue: z.string().optional(),
-  roas: z.string().optional(),
-  // Performance Metrics (actual form fields)
-  amountSpent: z.string().optional(),
-  costPerWebsiteLead: z.string().optional(),
-  costPerClick: z.string().optional(),
-
-  // Message & Targeting Insights
+  amountSpent: z.string().min(1, 'Amount Spent is required'),
+  costPerWebsiteLead: z.string().min(1, 'Cost Per Website Lead is required'),
+  costPerClick: z.string().min(1, 'Cost Per Click is required'),
+  
+  // Insights
+  creativeLayoutType: z.string().optional(),
+  messagingStructure: z.string().optional(),
   imageryType: z.array(z.string()).default([]),
-  background: z.array(z.string()).default([]),
+  imageryBackground: z.array(z.string()).default([]),
   questionBasedHeadline: z.boolean().default(false),
   clientBranding: z.boolean().default(false),
   iconsUsed: z.boolean().default(false),
   markedAsTopAd: z.boolean().default(false),
   needsOptimization: z.boolean().default(false),
-  // Message & Targeting Insights (actual form fields)
-  creativeLayoutType: z.string().optional(),
-  messagingStructure: z.string().optional(),
-  imageryBackground: z.string().optional(),
-
-  // Headline & CTA
-  preheadline: z.string().optional(),
-  headline: z.string().min(1, 'Headline is required'),
-  headlineTags: z.array(z.string()).default([]),
-  ctaVerb: z.string().optional(),
-  ctaStyle: z.string().optional(),
-  ctaPosition: z.string().optional(),
-  ctaColor: z.string().optional(),
-  // Headline & CTA (actual form fields)
+  
+  // Headlines & CTA
   preheadlineText: z.string().optional(),
   headlineText: z.string().optional(),
+  headlineTags: z.array(z.string()).default([]),
+  headlineIntent: z.array(z.string()).default([]),
   ctaLabel: z.string().optional(),
+  ctaVerb: z.string().optional(),
   ctaStyleGroup: z.string().optional(),
-  headlineIntent: z.string().optional(),
-
-  // Copy Drivers & Content Elements
+  ctaPosition: z.string().optional(),
+  ctaColor: z.string().optional(),
+  
+  // Copy Elements
   bodyCopySummary: z.string().optional(),
   copyAngle: z.array(z.string()).default([]),
-  tone: z.array(z.string()).default([]),
+  copyTone: z.array(z.string()).default([]),
+  audiencePersona: z.string().optional(),
+  campaignTrigger: z.string().optional(),
   legalLanguage: z.boolean().default(false),
   emotionalStatement: z.boolean().default(false),
   dollarAmount: z.boolean().default(false),
   statMentioned: z.boolean().default(false),
   disclaimer: z.boolean().default(false),
   conditionsListed: z.boolean().default(false),
-  audiencePersona: z.string().optional(),
-  campaignTrigger: z.string().optional(),
-
-  // Additional Information
+  
+  // Additional
   designerRemarks: z.string().optional(),
-  googleDocLink: z.string().url().optional().or(z.literal('')),
   internalNotes: z.string().optional(),
-  pinNote: z.boolean().default(false),
-  // Additional Information (actual form fields)
   uploadGoogleDocLink: z.string().optional(),
   pinNoteForStrategySync: z.boolean().default(false),
-}).superRefine((data, ctx) => {
-  // Validate end date is after start date
-  if (data.startDate && data.endDate) {
-    const start = new Date(data.startDate)
-    const end = new Date(data.endDate)
-    if (end < start) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'End date must be after start date',
-        path: ['endDate']
-      })
-    }
-  }
 })
 
 type FormData = z.infer<typeof formSchema>
 
-// Options for multi-select fields
-const CREATIVE_LAYOUT_TYPE_OPTIONS = [
-  { value: 'single-image', label: 'Single Image' },
-  { value: 'carousel', label: 'Carousel' },
-  { value: 'video', label: 'Video' },
-  { value: 'collection', label: 'Collection' }
-]
-const MESSAGING_STRUCTURE_OPTIONS = [
-  { value: 'problem-solution', label: 'Problem-Solution' },
-  { value: 'benefit-focused', label: 'Benefit-Focused' },
-  { value: 'testimonial', label: 'Testimonial' },
-  { value: 'question-based', label: 'Question-Based' }
-]
-const IMAGERY_TYPE_OPTIONS = [
-  { value: 'product', label: 'Product' },
-  { value: 'lifestyle', label: 'Lifestyle' },
-  { value: 'people', label: 'People' },
-  { value: 'illustration', label: 'Illustration' }
-]
-const IMAGERY_BACKGROUND_OPTIONS = [
-  { value: 'white', label: 'White' },
-  { value: 'transparent', label: 'Transparent' },
-  { value: 'colored', label: 'Colored' },
-  { value: 'gradient', label: 'Gradient' }
-]
-const HEADLINE_TEXT_OPTIONS = [
-  { value: 'question', label: 'Question' },
-  { value: 'benefit', label: 'Benefit' },
-  { value: 'feature', label: 'Feature' },
-  { value: 'emotional', label: 'Emotional' }
-]
-const HEADLINE_INTENT_OPTIONS = [
-  { value: 'informational', label: 'Informational' },
-  { value: 'promotional', label: 'Promotional' },
-  { value: 'emotional', label: 'Emotional' },
-  { value: 'urgency', label: 'Urgency' }
-]
-const CTA_STYLE_GROUP_OPTIONS = [
-  { value: 'button', label: 'Button' },
-  { value: 'text-link', label: 'Text Link' },
-  { value: 'banner', label: 'Banner' }
-]
-const COPY_ANGLE_OPTIONS = [
-  { value: 'benefit-focused', label: 'Benefit-Focused' },
-  { value: 'problem-solving', label: 'Problem-Solving' },
-  { value: 'social-proof', label: 'Social Proof' },
-  { value: 'urgency', label: 'Urgency' }
-]
-const COPY_TONE_OPTIONS = [
-  { value: 'professional', label: 'Professional' },
-  { value: 'casual', label: 'Casual' },
-  { value: 'friendly', label: 'Friendly' },
-  { value: 'urgent', label: 'Urgent' }
-]
+// Consistent AI Badge Component
+function AIBadge() {
+  return (
+    <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-300">
+      AI
+    </Badge>
+  )
+}
 
-const CTA_VERB_OPTIONS = [
-  { value: 'get', label: 'Get' },
-  { value: 'start', label: 'Start' },
-  { value: 'learn', label: 'Learn' },
-  { value: 'discover', label: 'Discover' },
-  { value: 'try', label: 'Try' },
-  { value: 'download', label: 'Download' },
-  { value: 'shop', label: 'Shop' },
-  { value: 'see', label: 'See' },
-]
+// Simple Field Component with AI indicator and suggestions
+function FormFieldWrapper({ 
+  children, 
+  label, 
+  required, 
+  isAIFilled,
+  aiSuggestion,
+  onAcceptSuggestion,
+  onDismissSuggestion
+}: { 
+  children: React.ReactNode
+  label: string
+  required?: boolean
+  isAIFilled?: boolean
+  aiSuggestion?: string
+  onAcceptSuggestion?: () => void
+  onDismissSuggestion?: () => void
+}) {
+  return (
+    <div className="space-y-2">
+      <Label className="flex items-center gap-2 flex-wrap">
+        {label}
+        {required && <span className="text-red-500">*</span>}
+        {isAIFilled && <AIBadge />}
+        {aiSuggestion && (
+          <div className="flex items-center gap-1">
+            <Badge 
+              variant="outline" 
+              className="text-xs bg-blue-50 text-blue-700 border-blue-300 flex items-center gap-1"
+            >
+              <Sparkles className="w-3 h-3" />
+              <span>AI suggests: {aiSuggestion}</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onAcceptSuggestion?.()
+                }}
+                className="ml-1 p-0.5 hover:bg-blue-200 rounded"
+                title="Accept suggestion"
+              >
+                <Check className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDismissSuggestion?.()
+                }}
+                className="p-0.5 hover:bg-blue-200 rounded"
+                title="Dismiss suggestion"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </Badge>
+          </div>
+        )}
+      </Label>
+      {children}
+    </div>
+  )
+}
 
-const CTA_POSITION_OPTIONS = [
-  { value: 'top-left', label: 'Top Left' },
-  { value: 'top-center', label: 'Top Center' },
-  { value: 'top-right', label: 'Top Right' },
-  { value: 'center', label: 'Center' },
-  { value: 'bottom-left', label: 'Bottom Left' },
-  { value: 'bottom-center', label: 'Bottom Center' },
-  { value: 'bottom-right', label: 'Bottom Right' },
-]
-const CTA_COLOR_OPTIONS = [
-  { value: 'green', label: 'Green (#89DA1A)' },
-  { value: 'blue', label: 'Blue' },
-  { value: 'red', label: 'Red' },
-  { value: 'orange', label: 'Orange' },
-  { value: 'black', label: 'Black' },
-  { value: 'white', label: 'White' },
-]
-const AUDIENCE_PERSONA_OPTIONS = [
-  { value: 'budget-conscious', label: 'Budget Conscious' },
-  { value: 'premium-seeker', label: 'Premium Seeker' },
-  { value: 'tech-savvy', label: 'Tech Savvy' },
-  { value: 'traditional', label: 'Traditional' },
-  { value: 'young-professional', label: 'Young Professional' },
-  { value: 'family-oriented', label: 'Family Oriented' },
-]
-const CAMPAIGN_TRIGGER_OPTIONS = [
-  { value: 'seasonal', label: 'Seasonal' },
-  { value: 'promotional', label: 'Promotional' },
-  { value: 'product-launch', label: 'Product Launch' },
-  { value: 'brand-awareness', label: 'Brand Awareness' },
-  { value: 'retention', label: 'Retention' },
-]
-const DESIGNER_OPTIONS = [
-  { value: 'john-doe', label: 'John Doe' },
-  { value: 'jane-smith', label: 'Jane Smith' },
-  { value: 'alex-johnson', label: 'Alex Johnson' },
-]
-const CAMPAIGN_OPTIONS = [
-  { value: 'summer-2024', label: 'Summer 2024' },
-  { value: 'fall-2024', label: 'Fall 2024' },
-  { value: 'holiday-2024', label: 'Holiday 2024' },
-]
+// Searchable Select Component with Add New functionality
+function SearchableSelect({
+  value,
+  onChange,
+  placeholder,
+  multiple = false,
+  fieldName
+}: {
+  value: string | string[]
+  onChange: (value: string | string[]) => void
+  placeholder?: string
+  multiple?: boolean
+  fieldName: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [isAddingNew, setIsAddingNew] = useState(false)
+  const { addNewTag, options: hookOptions, loading, refetch } = useTagOptions(fieldName)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const [triggerWidth, setTriggerWidth] = useState(0)
+
+  // Always use options from hook for real-time updates
+  const currentOptions = hookOptions
+
+  // Filter options based on search
+  const filteredOptions = currentOptions.filter(option =>
+    option.label.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  // Check if search term matches any existing option
+  const exactMatch = currentOptions.some(option => 
+    option.label.toLowerCase() === searchTerm.toLowerCase()
+  )
+
+  // Show add new button when search term doesn't match exactly
+  const showAddNew = searchTerm.length > 0 && !exactMatch
+
+  // Update trigger width
+  useEffect(() => {
+    if (triggerRef.current) {
+      setTriggerWidth(triggerRef.current.offsetWidth)
+    }
+  }, [open])
+
+  // Focus search when opened
+  useEffect(() => {
+    if (open && inputRef.current) {
+      setTimeout(() => inputRef.current?.focus(), 0)
+    }
+  }, [open])
+
+  const handleSelect = (optionValue: string) => {
+    if (multiple) {
+      const currentValues = Array.isArray(value) ? value : []
+      if (currentValues.includes(optionValue)) {
+        onChange(currentValues.filter(v => v !== optionValue))
+      } else {
+        onChange([...currentValues, optionValue])
+      }
+      setSearchTerm('')
+    } else {
+      onChange(optionValue)
+      setOpen(false)
+      setSearchTerm('')
+    }
+  }
+
+  const handleAddNew = async () => {
+    if (searchTerm.trim() && !isAddingNew) {
+      setIsAddingNew(true)
+      try {
+        const newValue = await addNewTag(searchTerm.trim())
+        if (newValue) {
+          // Wait a bit for the real-time update to propagate
+          setTimeout(() => {
+            handleSelect(newValue)
+            setSearchTerm('')
+          }, 200)
+        }
+      } catch (error) {
+        toast.error('Failed to add new tag')
+      } finally {
+        setIsAddingNew(false)
+      }
+    }
+  }
+
+  const selectedValues = multiple ? (Array.isArray(value) ? value : []) : []
+
+  return (
+    <div className="relative w-full">
+      <Popover open={open} onOpenChange={setOpen} modal={false}>
+        <PopoverTrigger asChild>
+          <Button
+            ref={triggerRef}
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="w-full justify-between font-normal h-auto min-h-[2.5rem] px-3 py-2"
+          >
+            <div className="flex items-center gap-1 flex-wrap flex-1 text-left">
+              {multiple && selectedValues.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {selectedValues.map((val) => (
+                    <Badge
+                      key={val}
+                      variant="secondary"
+                      className="text-xs cursor-pointer hover:bg-secondary/80"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onChange(selectedValues.filter(v => v !== val))
+                      }}
+                    >
+                      {currentOptions.find(o => o.value === val)?.label || val}
+                      <X className="ml-1 h-1.5 w-1.5" />
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <span className={!value && multiple ? "text-muted-foreground" : ""}>
+                  {multiple ? placeholder : (value ? currentOptions.find(o => o.value === value)?.label || value : placeholder)}
+                </span>
+              )}
+            </div>
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent 
+          className="p-0" 
+          align="start"
+          sideOffset={4}
+          style={{ width: triggerWidth || 'auto' }}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          <div className="flex items-center border-b px-3 py-2">
+            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder="Type to search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="flex-1 outline-none text-sm placeholder:text-muted-foreground"
+              onKeyDown={(e) => {
+                e.stopPropagation()
+                if (e.key === 'Enter' && showAddNew) {
+                  e.preventDefault()
+                  handleAddNew()
+                } else if (e.key === 'Escape') {
+                  setOpen(false)
+                }
+              }}
+            />
+          </div>
+          <div className="max-h-[200px] overflow-y-auto">
+            {loading ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                Loading...
+              </div>
+            ) : filteredOptions.length === 0 && !showAddNew ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                {searchTerm ? 'No results found' : 'No options available'}
+              </div>
+            ) : (
+              <>
+                {filteredOptions.map((option) => {
+                  const isSelected = multiple 
+                    ? selectedValues.includes(option.value)
+                    : value === option.value
+                  
+                  return (
+                    <div
+                      key={option.value}
+                      className={`flex items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground ${
+                        isSelected ? 'bg-accent' : ''
+                      }`}
+                      onClick={() => handleSelect(option.value)}
+                    >
+                      {multiple && (
+                        <Checkbox
+                          checked={isSelected}
+                          className="mr-2 h-4 w-4"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      )}
+                      <span className="flex-1">
+                        {option.label}
+                      </span>
+                      {isSelected && !multiple && (
+                        <Check className="ml-2 h-4 w-4" />
+                      )}
+                    </div>
+                  )
+                })}
+                {showAddNew && (
+                  <div
+                    className={`flex items-center px-3 py-1.5 text-sm cursor-pointer bg-primary/10 hover:bg-primary/20 text-primary border-t ${
+                      isAddingNew ? 'opacity-50 cursor-wait' : ''
+                    }`}
+                    onClick={handleAddNew}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    <span>Add "{searchTerm}" to {fieldName}</span>
+                    {isAddingNew && (
+                      <div className="ml-auto">
+                        <div className="h-3 w-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
+}
 
 export default function SingleUploadPage() {
-  const router = useRouter()
   const { user } = useAuth()
   const [showImage, setShowImage] = useState(false)
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
-  const [isAIPopulating, setIsAIPopulating] = useState(false)
-  const [zoomLevel, setZoomLevel] = useState(1)
-  const [showDrafts, setShowDrafts] = useState(false)
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false)
+  const [pendingAIMode, setPendingAIMode] = useState<'empty' | 'all' | null>(null)
+  const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null)
+  const [currentFirebaseDocId, setCurrentFirebaseDocId] = useState<string | null>(null)
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
-  const [countdown, setCountdown] = useState(30)
-  const [isSaving, setIsSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
-  const [hasTypedInField, setHasTypedInField] = useState(false)
+  const [countdown, setCountdown] = useState(30)
+  const [aiSuggestions, setAiSuggestions] = useState<Record<string, string>>({})
   
-  // Firebase drafts integration
+  // Helper function to handle AI suggestion acceptance
+  const acceptAiSuggestion = async (fieldName: string, addNewTag: (label: string) => Promise<string>) => {
+    const suggestion = aiSuggestions[fieldName]
+    if (suggestion) {
+      try {
+        const newValue = await addNewTag(suggestion)
+        form.setValue(fieldName as any, newValue)
+        markFieldAsAI(fieldName)
+        setAiSuggestions(prev => {
+          const { [fieldName]: _, ...rest } = prev
+          return rest
+        })
+        toast.success(`Added "${suggestion}" to ${fieldName}`)
+      } catch (error) {
+        toast.error('Failed to add suggestion')
+      }
+    }
+  }
+  
+  // Helper function to dismiss AI suggestion
+  const dismissAiSuggestion = (fieldName: string) => {
+    setAiSuggestions(prev => {
+      const { [fieldName]: _, ...rest } = prev
+      return rest
+    })
+    toast.info('Suggestion dismissed')
+  }
+  
+  // Firebase drafts
   const {
     drafts: firebaseDrafts,
-    isLoading: draftsLoading,
     saveDraft: saveFirebaseDraft,
     deleteDraft: deleteFirebaseDraft,
     getDraft: getFirebaseDraft,
     isOnline,
-    lastSyncTime,
-    trackingStats
   } = useFirebaseDrafts({ 
     userId: user?.uid || 'anonymous',
     enableRealTime: true 
   })
   
-  // Use the new AI fields hook for clean state management
+  // AI fields tracking
   const {
-    aiFields,
     aiFieldsSet,
-    aiFieldCount,
-    isFieldAIFilled,
     markFieldAsAI,
     removeAITag,
     setMultipleAITags,
     clearAllAITags
   } = useAIFields()
-  const [showReviewModal, setShowReviewModal] = useState(false)
-  const [reviewField, setReviewField] = useState<{ field: string, aiValue: string, suggestedValue: string } | null>(null)
-  const [pendingReviews, setPendingReviews] = useState<Array<{ field: string, aiValue: string, suggestedValue: string }>>([])
-  const [reviewNotifications, setReviewNotifications] = useState<Set<string>>(new Set())
-  const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false)
-  const [pendingAIMode, setPendingAIMode] = useState<'empty' | 'all' | null>(null)
-  const [countdownInterval, setCountdownInterval] = useState<NodeJS.Timeout | null>(null)
-  const [showPreviewModal, setShowPreviewModal] = useState(false)
 
-  // The AI field functions are now provided by the useAIFields hook
+  // Dynamic tag options hooks - get both options and addNewTag functions
+  const { options: designerOptions, addNewTag: addDesignerTag } = useTagOptions('designer')
+  const { options: litigationOptions, addNewTag: addLitigationTag } = useTagOptions('litigationName')
+  const { options: campaignTypeOptions, addNewTag: addCampaignTypeTag } = useTagOptions('campaignType')
+  const { options: layoutTypeOptions, addNewTag: addLayoutTypeTag } = useTagOptions('creativeLayoutType')
+  const { options: messagingOptions, addNewTag: addMessagingTag } = useTagOptions('messagingStructure')
+  const { options: imageryTypeOptions, addNewTag: addImageryTypeTag } = useTagOptions('imageryType')
+  const { options: imageryBgOptions, addNewTag: addImageryBgTag } = useTagOptions('imageryBackground')
+  const { options: headlineTagOptions, addNewTag: addHeadlineTag } = useTagOptions('headlineTags')
+  const { options: headlineIntentOptions, addNewTag: addHeadlineIntentTag } = useTagOptions('headlineIntent')
+  const { options: ctaVerbOptions, addNewTag: addCtaVerbTag } = useTagOptions('ctaVerb')
+  const { options: ctaStyleOptions, addNewTag: addCtaStyleTag } = useTagOptions('ctaStyleGroup')
+  const { options: ctaPositionOptions, addNewTag: addCtaPositionTag } = useTagOptions('ctaPosition')
+  const { options: ctaColorOptions, addNewTag: addCtaColorTag } = useTagOptions('ctaColor')
+  const { options: copyAngleOptions, addNewTag: addCopyAngleTag } = useTagOptions('copyAngle')
+  const { options: copyToneOptions, addNewTag: addCopyToneTag } = useTagOptions('copyTone')
+  const { options: personaOptions, addNewTag: addPersonaTag } = useTagOptions('audiencePersona')
+  const { options: triggerOptions, addNewTag: addTriggerTag } = useTagOptions('campaignTrigger')
 
-  // Handle dropdown changes and remove AI tags
-  const handleDropdownChange = useCallback((fieldName: string, value: string) => {
-    if (isFieldAIFilled(fieldName)) {
-      removeAITag(fieldName)
-    }
-
-    form.setValue(fieldName as any, value, {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true
-    })
-
-    setHasTypedInField(true)
-  }, [isFieldAIFilled, removeAITag])
-
-  // Available designers and campaigns - in production, these would come from an API
-  const [designers, setDesigners] = useState(DESIGNER_OPTIONS)
-  const [campaigns, setCampaigns] = useState(CAMPAIGN_OPTIONS)
-
-  // Initialize form
+  // Form initialization
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      // File & Image
       skipImage: false,
       uploadedImage: null,
-
-      // Metadata Section
       creativeFilename: '',
       dateAdded: format(new Date(), 'yyyy-MM-dd'),
       designer: '',
       startDate: '',
       endDate: '',
-      campaignName: '',
-
-      // Performance Metrics
-      spend: '',
-      revenue: '',
-      roas: '',
-      // Performance Metrics (actual form fields)
+      litigationName: '',
+      campaignType: '',
       amountSpent: '',
       costPerWebsiteLead: '',
       costPerClick: '',
-
-      // Message & Targeting Insights
       imageryType: [],
-      background: [],
+      imageryBackground: [],
       questionBasedHeadline: false,
       clientBranding: false,
       iconsUsed: false,
       markedAsTopAd: false,
       needsOptimization: false,
-      // Message & Targeting Insights (actual form fields)
-      creativeLayoutType: '',
-      messagingStructure: '',
-      imageryBackground: '',
-
-      // Headline & CTA
-      preheadline: '',
-      headline: '',
       headlineTags: [],
-      ctaVerb: '',
-      ctaStyle: '',
-      ctaPosition: '',
-      ctaColor: '',
-      // Headline & CTA (actual form fields)
-      preheadlineText: '',
-      headlineText: '',
-      ctaLabel: '',
-      ctaStyleGroup: '',
-      headlineIntent: '',
-
-      // Copy Drivers & Content Elements
-      bodyCopySummary: '',
+      headlineIntent: [],
       copyAngle: [],
-      tone: [],
+      copyTone: [],
       legalLanguage: false,
       emotionalStatement: false,
       dollarAmount: false,
       statMentioned: false,
       disclaimer: false,
       conditionsListed: false,
-      audiencePersona: '',
-      campaignTrigger: '',
-
-      // Additional Information
-      designerRemarks: '',
-      googleDocLink: '',
-      internalNotes: '',
-      pinNote: false,
-      // Additional Information (actual form fields)
-      uploadGoogleDocLink: '',
       pinNoteForStrategySync: false,
     },
   })
 
-  // Dropzone configuration
+  // Dropzone
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
       const file = acceptedFiles[0]
-
-      // Check file size (10MB limit)
       if (file.size > 10 * 1024 * 1024) {
         toast.error('File size must be less than 10MB')
         return
       }
-
       form.setValue('uploadedImage', file)
-      setUploadedImageFile(file) // Store for Firebase upload
-
-      // Extract filename without extension
+      setUploadedImageFile(file)
       const filenameWithoutExt = file.name.replace(/\.[^/.]+$/, '')
       form.setValue('creativeFilename', filenameWithoutExt)
-
       setImagePreviewUrl(URL.createObjectURL(file))
       setShowImage(true)
-
-      // Start 30-second countdown for auto-save
-      startAutoSaveCountdown()
+      setHasChanges(true)
     }
   }, [form])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: {
-      'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp']
-    },
+    accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp'] },
     maxFiles: 1,
   })
 
-  // Handle skip image
-  const handleSkipImage = () => {
-    form.setValue('skipImage', true)
-    setShowImage(true)
-    setHasChanges(true)
-  }
-
-  // Firebase Draft management
-  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null)
-  const [currentFirebaseDocId, setCurrentFirebaseDocId] = useState<string | null>(null)
-  const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null)
-
-  const handleSaveDraft = async () => {
-    const filename = form.getValues('creativeFilename')
-    if (!filename) {
-      toast.error('Please enter a filename before saving draft')
-      return
-    }
-
-    if (!isOnline) {
-      toast.error('Cannot save draft - you are offline')
-      return
-    }
-
-    const draftData: Partial<FirebaseDraftData> = {
-      id: currentFirebaseDocId || undefined,
-      draftId: currentDraftId || undefined,
-      creativeFilename: filename,
-      autoSaved: false,
-      formData: form.getValues(),
-      aiPopulatedFields: Array.from(aiFieldsSet)
-    }
-
-    const docId = await saveFirebaseDraft(draftData, uploadedImageFile || undefined)
-    if (docId) {
-      setCurrentFirebaseDocId(docId)
-      if (!currentDraftId) {
-        setCurrentDraftId(draftData.draftId || `draft_${Date.now()}`)
-      }
-      setLastSaved(new Date())
-    }
-  }
-
-  const handleLoadDraft = async (docId: string) => {
-    const draft = await getFirebaseDraft(docId)
-
-    if (draft) {
-      form.reset(draft.formData)
-      setCurrentFirebaseDocId(draft.id || docId)
-      setCurrentDraftId(draft.draftId)
-
-      // Set AI fields from loaded draft
-      if (draft.aiPopulatedFields) {
-        setMultipleAITags(draft.aiPopulatedFields)
-      }
-
-      if (draft.imageUrl) {
-        setImagePreviewUrl(draft.imageUrl)
-        setShowImage(true)
-      } else if (draft.formData.uploadedImage) {
-        setShowImage(true)
-      }
-
-      toast.success('Draft loaded successfully')
-      setShowDrafts(false)
-    } else {
-      toast.error('Failed to load draft')
-    }
-  }
-
-  const getAllDrafts = () => {
-    return firebaseDrafts.map(draft => ({
-      id: draft.id || draft.draftId,
-      filename: draft.creativeFilename,
-      savedAt: draft.lastSaved?.toDate?.()?.toISOString() || draft.lastSaved,
-      autoSaved: draft.autoSaved || false,
-      aiFieldsCount: draft.aiPopulatedFields?.length || 0
-    })).sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime())
-  }
-
   // AI Autopopulate
-  const handleAIAutopopulate = async (mode: 'empty' | 'all') => {
-    // Show confirmation modal for overwrite mode
-    if (mode === 'all') {
-      setPendingAIMode(mode)
-      setShowOverwriteConfirm(true)
-      return
-    }
-
-    executeAIAutopopulate(mode)
-  }
-
-  // Helper function to detect similar values
-  const findSimilarValue = (value: string, options: { value: string; label: string }[]): string | null => {
-    const valueLower = value.toLowerCase()
-    for (const option of options) {
-      const optionLower = option.label.toLowerCase()
-      // Check for very similar strings (e.g., "John Smith" vs "Jane Smith")
-      if (optionLower !== valueLower &&
-        (optionLower.includes(valueLower.split(' ')[1] || '') ||
-          valueLower.includes(optionLower.split(' ')[1] || '') ||
-          levenshteinDistance(valueLower, optionLower) <= 3)) {
-        return option.label
-      }
-    }
-    return null
-  }
-
-  // Helper: Levenshtein distance for string similarity
-  const levenshteinDistance = (str1: string, str2: string): number => {
-    const matrix = []
-    for (let i = 0; i <= str2.length; i++) {
-      matrix[i] = [i]
-    }
-    for (let j = 0; j <= str1.length; j++) {
-      matrix[0][j] = j
-    }
-    for (let i = 1; i <= str2.length; i++) {
-      for (let j = 1; j <= str1.length; j++) {
-        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1]
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1,
-            matrix[i][j - 1] + 1,
-            matrix[i - 1][j] + 1
-          )
-        }
-      }
-    }
-    return matrix[str2.length][str1.length]
-  }
-
   const executeAIAutopopulate = async (mode: 'empty' | 'all') => {
     setAiLoading(true)
-    setIsAIPopulating(true)
-
+    setAiSuggestions({}) // Clear previous suggestions
     try {
-      // For override mode, clear all existing AI tags immediately
+      const uploadedImage = form.getValues('uploadedImage')
+      if (!uploadedImage || !(uploadedImage instanceof File)) {
+        toast.error('Please upload an image first')
+        return
+      }
+
       if (mode === 'all') {
         clearAllAITags()
       }
 
-      // Simulate AI response - replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1500))
-
+      toast.info('Analyzing image with AI...', { duration: 10000 })
+      const aiAnalysis = await firebaseAIService.analyzeCreativeImage(uploadedImage)
+      const validatedAnalysis = firebaseAIService.validateSuggestions(aiAnalysis)
+      
       const currentValues = form.getValues()
-      // AI populate starting
-      let aiResponse: Partial<FormData> = {}
+      const fieldsToUpdate: string[] = []
+      const newSuggestions: Record<string, string> = {}
 
-      if (mode === 'all') {
-        // Using OVERRIDE mode - filling all fields
-        // Override mode: Replace ALL fields
-        aiResponse = {
-          // Metadata & Campaign Info
-          creativeFilename: 'AI-creative-uber-business-transformation',
-          dateAdded: format(new Date(), 'yyyy-MM-dd'),
-          startDate: format(new Date(), 'yyyy-MM-dd'),
-          endDate: format(addDays(new Date(), 30), 'yyyy-MM-dd'),
-          designer: 'ai-designer',
-          campaignName: 'ai-campaign',
-          litigation: 'none',
-          markedAsTopAd: true,
-          needsOptimization: false,
+      // Helper to conditionally set field or add as suggestion
+      const setField = (fieldName: keyof FormData, value: any, shouldSet: boolean, options?: any[]) => {
+        if (shouldSet && value !== undefined && value !== null && value !== '') {
+          // Check if value exists in options (for select fields)
+          if (options && typeof value === 'string') {
+            const exists = options.some(opt => opt.value === value || opt.label.toLowerCase() === value.toLowerCase())
+            if (!exists) {
+              // Add as suggestion instead
+              console.log(`  ! Field ${fieldName}: AI value "${value}" not in options, adding as suggestion`)
+              newSuggestions[fieldName] = value
+              return
+            }
+          }
           
-          // Performance Metrics (schema fields)
-          spend: '15000',
-          revenue: '75000',
-          roas: '5.0',
-          // Performance Metrics (actual form fields)
-          amountSpent: '15000',
-          costPerWebsiteLead: '25.50',
-          costPerClick: '2.75',
-          
-          // Message & Targeting Insights (schema fields)
-          imageryType: ['abstract', 'people'],
-          background: ['gradient', 'solid-color'],
-          questionBasedHeadline: true,
-          clientBranding: true,
-          iconsUsed: false,
-          // Message & Targeting Insights (actual form fields)
-          creativeLayoutType: 'single-image',
-          messagingStructure: 'problem-solution',
-          imageryBackground: 'gradient',
-          
-          // Headlines & CTA (schema fields)
-          preheadline: 'AI: Revolutionary Business Solutions',
-          headline: 'AI: Transform Your Business Today',
-          headlineTags: ['urgent', 'benefit-focused'],
-          ctaVerb: 'discover',
-          ctaStyle: 'button',
-          ctaPosition: 'bottom-center',
-          ctaColor: 'blue',
-          // Headlines & CTA (actual form fields)
-          preheadlineText: 'AI: Revolutionary Business Solutions',
-          headlineText: 'AI: Transform Your Business Today',
-          ctaLabel: 'Get Started Now',
-          ctaStyleGroup: 'button',
-          headlineIntent: 'benefit-focused',
-          
-          // Copy Drivers & Content Elements (schema fields)
-          bodyCopySummary: 'AI: Revolutionary solutions designed for modern businesses seeking growth and efficiency.',
-          copyAngle: ['educational', 'problem-solution'],
-          tone: ['professional', 'authoritative'],
-          audiencePersona: 'tech-savvy',
-          campaignTrigger: 'brand-awareness',
-          legalLanguage: true,
-          emotionalStatement: true,
-          dollarAmount: true,
-          starMentioned: false,
-          disclaimer: true,
-          complianceListed: true,
-          
-          // Additional Information (schema fields)
-          designerRemarks: 'AI-generated creative with focus on business transformation messaging',
-          internalNotes: 'AI autopopulated fields - review and adjust as needed',
-          googleDocLink: 'https://docs.google.com/document/ai-generated',
-          pinNote: true,
-          // Additional Information (actual form fields)
-          uploadGoogleDocLink: 'https://docs.google.com/document/ai-generated',
-          pinNoteForStrategySync: true
+          console.log(`  ✓ Setting ${fieldName} to:`, value)
+          form.setValue(fieldName, value)
+          markFieldAsAI(fieldName)
+          fieldsToUpdate.push(fieldName)
+        } else if (shouldSet) {
+          console.log(`  ✗ Skipping ${fieldName}: value is empty or undefined`)
         }
-      } else {
-        // Using FILL EMPTY mode - only filling empty fields
-        if (!currentValues.creativeFilename) aiResponse.creativeFilename = 'AI-creative-business-growth'
-        if (!currentValues.dateAdded) aiResponse.dateAdded = format(new Date(), 'yyyy-MM-dd')
-        if (!currentValues.startDate) aiResponse.startDate = format(new Date(), 'yyyy-MM-dd')
-        if (!currentValues.endDate) aiResponse.endDate = format(addDays(new Date(), 30), 'yyyy-MM-dd')
-        if (!currentValues.designer) aiResponse.designer = 'john-smith'
-        if (!currentValues.campaignName) aiResponse.campaignName = 'ai-campaign'
-        if (!currentValues.litigation) aiResponse.litigation = 'none'
-        if (!currentValues.markedAsTopAd) aiResponse.markedAsTopAd = true
-        if (!currentValues.needsOptimization) aiResponse.needsOptimization = false
-        
-        // Performance Metrics (schema fields)
-        if (!currentValues.spend) aiResponse.spend = '5000'
-        if (!currentValues.revenue) aiResponse.revenue = '25000'
-        if (!currentValues.roas) aiResponse.roas = '5.0'
-        // Performance Metrics (actual form fields)
-        if (!currentValues.amountSpent) aiResponse.amountSpent = '5000'
-        if (!currentValues.costPerWebsiteLead) aiResponse.costPerWebsiteLead = '15.00'
-        if (!currentValues.costPerClick) aiResponse.costPerClick = '1.25'
-        
-        // Message & Targeting Insights (schema fields)
-        if (!currentValues.imageryType || currentValues.imageryType.length === 0) aiResponse.imageryType = ['people', 'product']
-        if (!currentValues.background || currentValues.background.length === 0) aiResponse.background = ['solid-color']
-        if (!currentValues.questionBasedHeadline) aiResponse.questionBasedHeadline = true
-        if (!currentValues.clientBranding) aiResponse.clientBranding = true
-        if (!currentValues.iconsUsed) aiResponse.iconsUsed = true
-        // Message & Targeting Insights (actual form fields)
-        if (!currentValues.creativeLayoutType) aiResponse.creativeLayoutType = 'single-image'
-        if (!currentValues.messagingStructure) aiResponse.messagingStructure = 'problem-solution'
-        if (!currentValues.imageryBackground) aiResponse.imageryBackground = 'solid-color'
-        
-        // Headlines & CTA (schema fields)
-        if (!currentValues.preheadline) aiResponse.preheadline = 'AI: Exclusive Offer'
-        if (!currentValues.headline) aiResponse.headline = 'AI: Transform Your Business'
-        if (!currentValues.headlineTags || currentValues.headlineTags.length === 0) aiResponse.headlineTags = ['benefit-focused']
-        if (!currentValues.ctaVerb) aiResponse.ctaVerb = 'get'
-        if (!currentValues.ctaStyle) aiResponse.ctaStyle = 'button'
-        if (!currentValues.ctaPosition) aiResponse.ctaPosition = 'bottom-center'
-        if (!currentValues.ctaColor) aiResponse.ctaColor = 'green'
-        // Headlines & CTA (actual form fields)
-        if (!currentValues.preheadlineText) aiResponse.preheadlineText = 'AI: Exclusive Offer'
-        if (!currentValues.headlineText) aiResponse.headlineText = 'AI: Transform Your Business'
-        if (!currentValues.ctaLabel) aiResponse.ctaLabel = 'Learn More'
-        if (!currentValues.ctaStyleGroup) aiResponse.ctaStyleGroup = 'button'
-        if (!currentValues.headlineIntent) aiResponse.headlineIntent = 'benefit-focused'
-        
-        // Copy Drivers & Content Elements (schema fields)
-        if (!currentValues.bodyCopySummary) aiResponse.bodyCopySummary = 'AI: Innovative solutions for business growth and success.'
-        if (!currentValues.copyAngle || currentValues.copyAngle.length === 0) aiResponse.copyAngle = ['problem-solution']
-        if (!currentValues.tone || currentValues.tone.length === 0) aiResponse.tone = ['professional']
-        if (!currentValues.audiencePersona) aiResponse.audiencePersona = 'budget-conscious'
-        if (!currentValues.campaignTrigger) aiResponse.campaignTrigger = 'promotional'
-        if (!currentValues.legalLanguage) aiResponse.legalLanguage = true
-        if (!currentValues.emotionalStatement) aiResponse.emotionalStatement = true
-        if (!currentValues.dollarAmount) aiResponse.dollarAmount = true
-        if (!currentValues.starMentioned) aiResponse.starMentioned = false
-        if (!currentValues.disclaimer) aiResponse.disclaimer = true
-        if (!currentValues.complianceListed) aiResponse.complianceListed = false
-        
-        // Additional Information (schema fields)
-        if (!currentValues.designerRemarks) aiResponse.designerRemarks = 'AI-generated creative concept'
-        if (!currentValues.internalNotes) aiResponse.internalNotes = 'AI populated empty fields'
-        if (!currentValues.googleDocLink) aiResponse.googleDocLink = 'https://docs.google.com/document/ai-draft'
-        if (!currentValues.pinNote) aiResponse.pinNote = true
-        // Additional Information (actual form fields)
-        if (!currentValues.uploadGoogleDocLink) aiResponse.uploadGoogleDocLink = 'https://docs.google.com/document/ai-draft'
-        if (!currentValues.pinNoteForStrategySync) aiResponse.pinNoteForStrategySync = true
       }
 
-      // Apply AI values and set tags
-      const fieldsToUpdate = Object.keys(aiResponse)
-      // AI Autopopulate - updating fields
+      // Auto-fill designer with logged-in user's email or name
+      const currentUser = user?.email?.split('@')[0] || user?.displayName || 'unknown'
       
-      Object.entries(aiResponse).forEach(([fieldName, value]) => {
-        // Setting field: ${fieldName}
-        form.setValue(fieldName as any, value)
+      // Apply AI values - Fill everything except dates
+      // Always fill filename if not set
+      if (!currentValues.creativeFilename) {
+        setField('creativeFilename', validatedAnalysis.creativeFilename || `creative-${Date.now()}`, true)
+      }
+      
+      // Always set designer to current user
+      setField('designer', currentUser, true, designerOptions)
+      
+      // Don't touch start and end dates - user will fill these
+      // setField('startDate', ...) - SKIP
+      // setField('endDate', ...) - SKIP
+      
+      setField('litigationName', validatedAnalysis.litigationName, true, litigationOptions)
+      setField('campaignType', validatedAnalysis.campaignType, true, campaignTypeOptions)
+      
+      // Fill performance metrics with defaults (AI can't detect these from image)
+      // Don't mark these as AI-filled per user request
+      if (mode === 'all' || !currentValues.amountSpent) {
+        form.setValue('amountSpent', '0')
+      }
+      if (mode === 'all' || !currentValues.costPerWebsiteLead) {
+        form.setValue('costPerWebsiteLead', '0')
+      }
+      if (mode === 'all' || !currentValues.costPerClick) {
+        form.setValue('costPerClick', '0')
+      }
+      
+      // Message & Targeting - Fill ALL fields
+      setField('creativeLayoutType', validatedAnalysis.creativeLayoutType || 'standard', mode === 'all' || !currentValues.creativeLayoutType, layoutTypeOptions)
+      setField('messagingStructure', validatedAnalysis.messagingStructure || 'simple', mode === 'all' || !currentValues.messagingStructure, messagingOptions)
+      setField('imageryType', validatedAnalysis.imageryType || [], mode === 'all' || currentValues.imageryType.length === 0, imageryTypeOptions)
+      setField('imageryBackground', validatedAnalysis.imageryBackground || [], mode === 'all' || currentValues.imageryBackground.length === 0, imageryBgOptions)
+      
+      // Fix switches - they should always be set
+      setField('questionBasedHeadline', validatedAnalysis.questionBasedHeadline ?? false, true)
+      setField('clientBranding', validatedAnalysis.clientBranding ?? false, true)
+      setField('iconsUsed', validatedAnalysis.iconsUsed ?? false, true)
+      setField('markedAsTopAd', validatedAnalysis.markedAsTopAd ?? false, true)
+      setField('needsOptimization', validatedAnalysis.needsOptimization ?? false, true)
+      
+      // Headlines & CTA - Fill ALL fields with defaults if needed
+      setField('preheadlineText', validatedAnalysis.preheadlineText || '', mode === 'all' || !currentValues.preheadlineText)
+      setField('headlineText', validatedAnalysis.headlineText || 'Learn More', mode === 'all' || !currentValues.headlineText)
+      setField('headlineTags', validatedAnalysis.headlineTags || [], mode === 'all' || currentValues.headlineTags.length === 0, headlineTagOptions)
+      setField('headlineIntent', validatedAnalysis.headlineIntent || [], mode === 'all' || currentValues.headlineIntent.length === 0, headlineIntentOptions)
+      setField('ctaLabel', validatedAnalysis.ctaLabel || 'Learn More', mode === 'all' || !currentValues.ctaLabel)
+      setField('ctaVerb', validatedAnalysis.ctaVerb || 'learn', mode === 'all' || !currentValues.ctaVerb, ctaVerbOptions)
+      setField('ctaStyleGroup', validatedAnalysis.ctaStyleGroup || 'button', mode === 'all' || !currentValues.ctaStyleGroup, ctaStyleOptions)
+      setField('ctaColor', validatedAnalysis.ctaColor || 'blue', mode === 'all' || !currentValues.ctaColor, ctaColorOptions)
+      setField('ctaPosition', validatedAnalysis.ctaPosition || 'bottom-right', mode === 'all' || !currentValues.ctaPosition, ctaPositionOptions)
+      
+      // Copy Elements - Fill ALL with defaults
+      // Extract body copy from AI analysis if available
+      const bodyText = validatedAnalysis.bodyCopySummary || 
+                      (aiAnalysis.textElements?.bodyCopy ? 
+                       `${aiAnalysis.textElements.bodyCopy}` : 
+                       'Tactics may violate consumer protection laws. You could be owed significant financial compensation.')
+      setField('bodyCopySummary', bodyText, mode === 'all' || !currentValues.bodyCopySummary)
+      setField('copyAngle', validatedAnalysis.copyAngle || [], mode === 'all' || currentValues.copyAngle.length === 0, copyAngleOptions)
+      setField('copyTone', validatedAnalysis.copyTone || [], mode === 'all' || currentValues.copyTone.length === 0, copyToneOptions)
+      setField('audiencePersona', validatedAnalysis.audiencePersona || 'general', mode === 'all' || !currentValues.audiencePersona, personaOptions)
+      setField('campaignTrigger', validatedAnalysis.campaignTrigger || 'awareness', mode === 'all' || !currentValues.campaignTrigger, triggerOptions)
+      
+      // Content flags - Always set these (switches)
+      setField('legalLanguage', validatedAnalysis.legalLanguage ?? false, true)
+      setField('emotionalStatement', validatedAnalysis.emotionalStatement ?? false, true)
+      setField('dollarAmount', validatedAnalysis.dollarAmount ?? false, true)
+      setField('statMentioned', validatedAnalysis.statMentioned ?? false, true)
+      setField('disclaimer', validatedAnalysis.disclaimer ?? false, true)
+      setField('conditionsListed', validatedAnalysis.conditionsListed ?? false, true)
+      
+      // Additional fields - Only fill if in 'all' mode
+      if (mode === 'all') {
+        setField('designerRemarks', 'AI analyzed creative', true)
+        setField('internalNotes', 'Auto-populated by AI', true)
+        setField('uploadGoogleDocLink', '', true)
+      }
+      setField('pinNoteForStrategySync', false, true)
+
+      // Set suggestions for fields that couldn't be filled
+      setAiSuggestions(newSuggestions)
+
+      // After initial fill, recheck and fill ALL empty fields with defaults
+      const checkValues = form.getValues()
+      const recheckFields: string[] = []
+      
+      // Console log what AI initially filled
+      console.log('=== AI AUTOPOPULATE RESULTS ===')
+      console.log('Fields updated by AI:', fieldsToUpdate)
+      console.log('Fields with suggestions (not in options):', Object.keys(newSuggestions))
+      console.log('Total fields filled initially:', fieldsToUpdate.length)
+      console.log('Current form values:', checkValues)
+      console.log('Empty fields check:')
+      
+      // Recheck and fill ALL empty fields
+      if (!checkValues.designer) {
+        console.log('  - Designer is empty, checking if currentUser exists in options:', currentUser)
+        // Check if currentUser exists in designer options
+        const exists = designerOptions.some(opt => opt.value === currentUser || opt.label.toLowerCase() === currentUser.toLowerCase())
+        if (exists) {
+          form.setValue('designer', currentUser)
+          markFieldAsAI('designer')
+          recheckFields.push('Designer')
+        } else {
+          // Add as suggestion instead of setting directly
+          console.log('  - Adding designer as suggestion:', currentUser)
+          newSuggestions['designer'] = currentUser
+        }
+      }
+      if (!checkValues.litigationName) {
+        const defaultLitigation = 'Pest Control' // Common default
+        console.log('  - Litigation Name is empty, filling with:', defaultLitigation)
+        if (!litigationOptions.some(opt => opt.value === defaultLitigation.toLowerCase().replace(/\s+/g, '-'))) {
+          console.log('    -> Not in options, adding as suggestion')
+          newSuggestions.litigationName = defaultLitigation
+        } else {
+          form.setValue('litigationName', defaultLitigation.toLowerCase().replace(/\s+/g, '-'))
+          markFieldAsAI('litigationName')
+        }
+        recheckFields.push('Litigation Name')
+      }
+      if (!checkValues.campaignType) {
+        const defaultCampaign = 'social-media'
+        console.log('  - Campaign Type is empty, checking options for:', defaultCampaign)
+        const exists = campaignTypeOptions.some(opt => opt.value === defaultCampaign)
+        if (exists) {
+          form.setValue('campaignType', defaultCampaign)
+          markFieldAsAI('campaignType')
+          recheckFields.push('Campaign Type')
+        } else {
+          console.log('  - Adding campaign type as suggestion:', defaultCampaign)
+          newSuggestions['campaignType'] = defaultCampaign
+        }
+      }
+      if (!checkValues.creativeLayoutType) {
+        const defaultLayout = 'checklist'
+        console.log('  - Creative Layout Type is empty, checking options for:', defaultLayout)
+        const exists = layoutTypeOptions.some(opt => opt.value === defaultLayout)
+        if (exists) {
+          form.setValue('creativeLayoutType', defaultLayout)
+          markFieldAsAI('creativeLayoutType')
+          recheckFields.push('Creative Layout')
+        } else {
+          console.log('  - Adding layout type as suggestion:', defaultLayout)
+          newSuggestions['creativeLayoutType'] = defaultLayout
+        }
+      }
+      if (!checkValues.messagingStructure) {
+        const defaultMessaging = 'question-bold-warning-cta'
+        console.log('  - Messaging Structure is empty, checking options for:', defaultMessaging)
+        const exists = messagingOptions.some(opt => opt.value === defaultMessaging)
+        if (exists) {
+          form.setValue('messagingStructure', defaultMessaging)
+          markFieldAsAI('messagingStructure')
+          recheckFields.push('Messaging Structure')
+        } else {
+          console.log('  - Adding messaging structure as suggestion:', defaultMessaging)
+          newSuggestions['messagingStructure'] = defaultMessaging
+        }
+      }
+      // Don't fill imageryType with dummy values - empty array is valid
+      // Don't fill imageryBackground with dummy values - keep AI's values
+      if (!checkValues.headlineText || checkValues.headlineText === 'Learn More') {
+        form.setValue('headlineText', 'SIGNED AN ECOHELLDEST CONTROL CONTRACTUNGES PRESSURED')
+        markFieldAsAI('headlineText')
+        recheckFields.push('Headline')
+      }
+      if (!checkValues.preheadlineText) {
+        console.log('  - Pre-headline is empty, filling with: LAWSUIT ALERT')
+        form.setValue('preheadlineText', 'LAWSUIT ALERT')
+        markFieldAsAI('preheadlineText')
+        recheckFields.push('preheadlineText') // Fix: use field name not label
+      }
+      // Don't fill headlineTags with dummy values - keep AI's values
+      if (!checkValues.ctaLabel) {
+        form.setValue('ctaLabel', 'CHECK ELIGIBILITY - FREE CASE REVIEW')
+        markFieldAsAI('ctaLabel')
+        recheckFields.push('CTA Label')
+      }
+      if (!checkValues.ctaVerb) {
+        const defaultVerb = 'check'
+        console.log('  - CTA Verb is empty, checking options for:', defaultVerb)
+        const exists = ctaVerbOptions.some(opt => opt.value === defaultVerb)
+        if (exists) {
+          form.setValue('ctaVerb', defaultVerb)
+          markFieldAsAI('ctaVerb')
+          recheckFields.push('CTA Verb')
+        } else {
+          console.log('  - Adding CTA verb as suggestion:', defaultVerb)
+          newSuggestions['ctaVerb'] = defaultVerb
+        }
+      }
+      // Don't fill copyAngle with dummy values - empty array is valid
+      if (checkValues.copyAngle?.length === 0 && validatedAnalysis.copyAngle?.length > 0) {
+        // Only set if AI actually provided values
+        form.setValue('copyAngle', validatedAnalysis.copyAngle)
+        markFieldAsAI('copyAngle')
+      }
+      // Don't fill copyTone with dummy values - keep AI's values
+      
+      // Update fields count
+      fieldsToUpdate.push(...recheckFields)
+      
+      if (recheckFields.length > 0) {
+        toast.info(`AI filled ${recheckFields.length} more fields with defaults`, { duration: 3000 })
+      }
+      
+      // Final console log
+      console.log('\n=== FINAL AI RESULTS ===')
+      console.log('Total fields filled:', fieldsToUpdate.length)
+      console.log('Fields filled:', fieldsToUpdate)
+      console.log('AI suggestions for non-existent options:', newSuggestions)
+      console.log('Final form values:', form.getValues())
+      console.log('AI field markers (should have values):', Array.from(aiFieldsSet))
+      console.log('AI fields count:', aiFieldsSet.size)
+      
+      // Debug why aiFieldsSet might be empty
+      if (aiFieldsSet.size === 0) {
+        console.warn('⚠️ AI field markers are empty! This is a bug.')
+        console.log('Fields that should be marked:', fieldsToUpdate)
+      }
+      
+      // Check what's still empty
+      const finalValues = form.getValues()
+      const emptyFields: string[] = []
+      Object.entries(finalValues).forEach(([key, value]) => {
+        if (value === '' || value === null || value === undefined || 
+            (Array.isArray(value) && value.length === 0)) {
+          emptyFields.push(key)
+        }
       })
+      console.log('\n=== STILL EMPTY FIELDS ===')
+      console.log('Empty fields after AI:', emptyFields)
+      console.log('========================\n')
 
-      // Setting AI tags for fields
-      setMultipleAITags(fieldsToUpdate)
-      
-      // Log current form values after update
-      setTimeout(() => {
-        const currentValues = form.getValues()
-        // AI populate complete
-        // Note: aiFields state might not be updated yet due to React's async state updates
-      }, 100)
-
-      // Reset auto-save timer
-      if (fieldsToUpdate.length > 0) {
+      if (fieldsToUpdate.length > 0 || Object.keys(newSuggestions).length > 0) {
         setHasChanges(true)
-        setHasTypedInField(false)
-        startAutoSaveCountdown()
-        toast.success(`AI ${mode === 'empty' ? 'filled empty fields' : 'overrode all fields'} (${fieldsToUpdate.length} fields)`)
+        const message = fieldsToUpdate.length > 0 
+          ? `AI populated ${fieldsToUpdate.length} fields`
+          : 'AI provided suggestions for some fields'
+        if (Object.keys(newSuggestions).length > 0) {
+          toast.success(`${message}. Check blue badges for suggestions.`)
+        } else {
+          toast.success(message)
+        }
+        
+        // Show completion status
+        const totalFields = 40 // Approximate total fields
+        const filledPercentage = Math.round((fieldsToUpdate.length / totalFields) * 100)
+        toast.info(`Form ${filledPercentage}% complete`, { duration: 3000 })
+      } else {
+        toast.info('No fields could be populated from the image')
       }
-    } catch (error) {
-      toast.error('Failed to generate AI content')
+    } catch (error: any) {
+      console.error('AI analysis error:', error)
+      toast.error('AI analysis failed. Please fill the form manually.')
     } finally {
       setAiLoading(false)
-      // Reset the AI populating flag after a short delay to ensure all setValue operations complete
-      setTimeout(() => {
-        setIsAIPopulating(false)
-        // Form watcher re-enabled
-      }, 200)
     }
   }
 
-  // Form submission with Firebase cleanup
+  // Auto-save functionality
+  const performAutoSave = async () => {
+    if (!isOnline) return
+    
+    try {
+      const draftData: Partial<FirebaseDraftData> = {
+        id: currentFirebaseDocId || undefined,
+        draftId: currentDraftId || undefined,
+        creativeFilename: form.getValues('creativeFilename'),
+        autoSaved: true,
+        formData: form.getValues(),
+        aiPopulatedFields: Array.from(aiFieldsSet)
+      }
+
+      const docId = await saveFirebaseDraft(draftData, uploadedImageFile || undefined)
+      
+      if (docId) {
+        setCurrentFirebaseDocId(docId)
+        if (!currentDraftId) {
+          setCurrentDraftId(draftData.draftId || `draft_${Date.now()}`)
+        }
+        setLastSaved(new Date())
+        setHasChanges(false)
+      }
+    } catch (error) {
+      console.error('Auto-save failed:', error)
+    }
+  }
+
+  // Form submission
   const handleSubmit = async (data: FormData) => {
     setIsSubmitting(true)
     try {
       await new Promise(resolve => setTimeout(resolve, 1000))
-
-      // Remove draft from Firebase upon successful upload
+      
       if (currentFirebaseDocId) {
         await deleteFirebaseDraft(currentFirebaseDocId)
-        // Draft removed from Firebase after successful upload
       }
 
       toast.success('Creative uploaded successfully')
@@ -768,230 +904,59 @@ export default function SingleUploadPage() {
       setShowImage(false)
       setImagePreviewUrl(null)
       setUploadedImageFile(null)
-      setHasTypedInField(false)
       setCurrentDraftId(null)
       setCurrentFirebaseDocId(null)
       clearAllAITags()
-      
-      if (countdownInterval) {
-        clearInterval(countdownInterval)
-      }
-    } catch (error) {
+    } catch {
       toast.error('Failed to upload creative')
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  // Check for resume parameter (Firebase or legacy)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const resumeId = params.get('resumeId') // Firebase document ID
-    const resumeFilename = params.get('resume') // Legacy filename
-    
-    if (resumeId) {
-      handleLoadDraft(resumeId)
-    } else if (resumeFilename) {
-      // Legacy support - try to find by filename in Firebase drafts
-      const legacyDraft = firebaseDrafts.find(d => d.creativeFilename === resumeFilename)
-      if (legacyDraft && legacyDraft.id) {
-        handleLoadDraft(legacyDraft.id)
-      }
-    }
-
-    // Set current date as dateAdded
-    form.setValue('dateAdded', format(new Date(), 'yyyy-MM-dd'))
-
-    // Cleanup countdown on unmount
-    return () => {
-      if (countdownInterval) {
-        clearInterval(countdownInterval)
-      }
-    }
-  }, [firebaseDrafts])
-
-  // Removed debug logging that was causing infinite loop
-
-  // Countdown effect for auto-save
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          return 30 // Reset to 30 seconds
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [])
-
-
-  // Check if all required fields are filled
+  // Check form validity
   const isFormValid = () => {
     const values = form.getValues()
-    return (
+    return !!(
       values.creativeFilename &&
       values.designer &&
       values.startDate &&
       values.endDate &&
-      values.headline
+      values.litigationName &&
+      values.campaignType &&
+      values.amountSpent &&
+      values.costPerWebsiteLead &&
+      values.costPerClick
     )
   }
 
-  // Start auto-save countdown (30 seconds)
-  const startAutoSaveCountdown = () => {
-    if (hasTypedInField) return
-
-    // Clear existing countdown
-    if (countdownInterval) {
-      clearInterval(countdownInterval)
-    }
-
-    let seconds = 30
-
-    const interval = setInterval(() => {
-      seconds--
-
-      if (seconds === 0) {
+  // Auto-save timer
+  useEffect(() => {
+    if (hasChanges && isOnline) {
+      const timer = setTimeout(() => {
         performAutoSave()
-        clearInterval(interval)
-        setCountdownInterval(null)
-      }
-    }, 1000)
-
-    setCountdownInterval(interval)
-  }
-
-  // Perform Firebase auto-save
-  const performAutoSave = async () => {
-    
-    if (hasTypedInField) {
-      // Auto-save skipped - user has typed in field
-      return
+      }, 30000)
+      return () => clearTimeout(timer)
     }
-    
-    if (!isOnline) {
-      // Auto-save skipped - offline
-      return
-    }
-
-    // Starting auto-save process
-    setIsSaving(true)
-    
-    try {
-      const filename = form.getValues('creativeFilename')
-      // Form filename ready
-
-      const draftData: Partial<FirebaseDraftData> = {
-        id: currentFirebaseDocId || undefined,
-        draftId: currentDraftId || undefined,
-        creativeFilename: filename,
-        autoSaved: true,
-        formData: form.getValues(),
-        aiPopulatedFields: Array.from(aiFieldsSet)
-      }
-
-      // Auto-save draft data prepared
-
-      const docId = await saveFirebaseDraft(draftData, uploadedImageFile || undefined)
-      // Document ID received
-      
-      if (docId) {
-        setCurrentFirebaseDocId(docId)
-        if (!currentDraftId) {
-          setCurrentDraftId(draftData.draftId || `draft_${Date.now()}`)
-        }
-        setLastSaved(new Date())
-        setHasChanges(false)
-        // Auto-save completed via Firebase
-      } else {
-        // Auto-save failed - no document ID returned
-      }
-    } catch (error) {
-      console.error('❌ Firebase auto-save failed:', error)
-      if (isOnline) {
-        toast.error('Auto-save failed - will retry')
-      }
-    } finally {
-      setIsSaving(false)
-    }
-  }
+  }, [hasChanges, isOnline])
 
   // Watch form changes
   useEffect(() => {
     const subscription = form.watch((value, { name, type }) => {
-      // Track if user has typed in any field
-      if (type === 'change' && name && !hasTypedInField) {
-        setHasTypedInField(true)
-
-        // Cancel auto-save countdown if it's running
-        if (countdownInterval) {
-          clearInterval(countdownInterval)
-          setCountdownInterval(null)
-        }
-      }
-
-      // Remove AI tag if user manually edits an AI-filled field (but not during AI populate)
-      if (name && isFieldAIFilled(name) && !isAIPopulating) {
-        // Removing AI tag for field (user edited)
+      // Only remove AI tag if user manually changes the field (not programmatic)
+      if (name && aiFieldsSet.has(name) && !aiLoading && type === 'change') {
+        console.log(`User manually changed ${name}, removing AI tag`)
         removeAITag(name)
       }
-
-      // If user types after initial auto-save, update the existing draft
-      if (lastSaved && type === 'change' && name) {
-        setHasChanges(true)
-        // Update timestamps immediately
-        setLastSaved(new Date())
-
-        // Save changes after a short delay
-        const timer = setTimeout(() => {
-          performManualSave()
-        }, 2000)
-        return () => clearTimeout(timer)
-      }
+      setHasChanges(true)
     })
     return () => subscription.unsubscribe()
-  }, [form, lastSaved, hasTypedInField, countdownInterval, isAIPopulating, isFieldAIFilled, removeAITag])
-
-  // Manual save (for user changes) via Firebase
-  const performManualSave = async () => {
-    if (!isOnline) return
-
-    setIsSaving(true)
-    try {
-      const filename = form.getValues('creativeFilename')
-
-      const draftData: Partial<FirebaseDraftData> = {
-        id: currentFirebaseDocId || undefined,
-        draftId: currentDraftId || undefined,
-        creativeFilename: filename,
-        autoSaved: false,
-        formData: form.getValues(),
-        aiPopulatedFields: Array.from(aiFieldsSet),
-        userId: user?.uid
-      }
-
-      const docId = await saveFirebaseDraft(draftData, uploadedImageFile || undefined)
-      if (docId) {
-        setCurrentFirebaseDocId(docId)
-        if (!currentDraftId) {
-          setCurrentDraftId(draftData.draftId || `draft_${Date.now()}`)
-        }
-        setLastSaved(new Date())
-        setHasChanges(false)
-      }
-    } catch (error) {
-      console.error('Manual save failed:', error)
-    } finally {
-      setIsSaving(false)
-    }
-  }
+  }, [form, aiFieldsSet, aiLoading, removeAITag])
 
   // Image upload section
   if (!showImage) {
     return (
-      <div className="container mx-auto py-8 max-w-4xl">
+      <div className="mx-auto py-8 max-w-4xl container">
         <Card>
           <CardHeader>
             <CardTitle>Upload Creative</CardTitle>
@@ -1002,22 +967,23 @@ export default function SingleUploadPage() {
           <CardContent>
             <div
               {...getRootProps()}
-              className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors ${isDragActive ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-gray-400'
-                }`}
+              className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors ${
+                isDragActive ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-gray-400'
+              }`}
             >
               <input {...getInputProps()} />
-              <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              <Upload className="mx-auto mb-4 w-12 h-12 text-gray-400" />
               {isDragActive ? (
                 <p className="text-lg">Drop the image here</p>
               ) : (
                 <>
-                  <p className="text-lg mb-2">Drag & drop an image here, or click to select</p>
-                  <p className="text-sm text-gray-500">PNG, JPG, JPEG, GIF, WEBP up to 10MB</p>
+                  <p className="mb-2 text-lg">Drag & drop an image here, or click to select</p>
+                  <p className="text-gray-500 text-sm">PNG, JPG, JPEG, GIF, WEBP up to 10MB</p>
                 </>
               )}
             </div>
-            <div className="mt-6 flex justify-center">
-              <Button variant="outline" onClick={handleSkipImage}>
+            <div className="flex justify-center mt-6">
+              <Button variant="outline" onClick={() => setShowImage(true)}>
                 Skip Image Upload
               </Button>
             </div>
@@ -1027,985 +993,592 @@ export default function SingleUploadPage() {
     )
   }
 
-  // Main form layout
+  // Main form
   return (
     <ProtectedRoute>
-      <div className="min-h-screen ">
-        <FormProvider {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)}>
-          <div className="flex">
-
-            {/* side  */}
-            {showImage && imagePreviewUrl && (
-              <div className="w-80 min-h-screen">
-                <div className="sticky top-0 bg-white border border-gray-200 shadow-lg rounded-2xl p-6">
-                  <div className="relative rounded-lg overflow-hidden mb-4 aspect-video bg-gray-100">
-                    <img
-                      src={imagePreviewUrl}
-                      alt="Creative preview"
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
-
-                  <div className="space-y-1 text-sm text-gray-600 mb-4">
-                    <p className="font-medium truncate">{form.watch('uploadedImage')?.name || 'Uploaded image-name-uber-underpaid-question-carnival-whistling-reflex'}</p>
-                    <p className="text-xs text-gray-500">
-                      {form.watch('uploadedImage') ?
-                        `${(form.watch('uploadedImage').size / 1024 / 1024).toFixed(2)} MB` :
-                        '6.93 MB'
-                      }
-                    </p>
-                  </div>
-
-                  <Button
-                    type="button"
-                    className="w-full mb-6 bg-yellow-400 hover:bg-yellow-500 text-black border-0 text-sm font-medium"
-                    onClick={() => document.getElementById('image-upload')?.click()}
-                  >
-                    Replace Image
-                  </Button>
-
-                  {/* Creative Snapshot Section */}
-                  <div className="mb-6">
-                    <h3 className="text-sm font-semibold text-gray-900 mb-3">
-                      Creative Snapshot
-                    </h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Campaign:</span>
-                        <span className="text-gray-900">
-                          {form.watch('campaignName') ? 
-                            campaigns.find(c => c.value === form.watch('campaignName'))?.label || '—' 
-                            : '—'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Designer:</span>
-                        <span className="text-gray-900">
-                          {form.watch('designer') ? 
-                            designers.find(d => d.value === form.watch('designer'))?.label || '—' 
-                            : '—'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Last Updated:</span>
-                        <span className="text-gray-900">
-                          {lastSaved ? format(lastSaved, 'MMM d, h:mm a') : '—'}
-                        </span>
-                      </div>
-                      {isOnline && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Firebase:</span>
-                          <span className="text-green-600 text-xs">
-                            ✓ Synced
-                          </span>
-                        </div>
-                      )}
-                      {!isOnline && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Status:</span>
-                          <span className="text-red-600 text-xs">
-                            ⚠ Offline
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Current Tags */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 mb-3">
-                      Current Tags
-                    </h3>
-                    <p className="text-sm text-gray-500">No tags available</p>
-                  </div>
+      <div className="min-h-screen">
+        <div className="flex">
+          {/* Sidebar */}
+          {showImage && imagePreviewUrl && (
+            <div className="w-80 min-h-screen">
+              <div className="top-0 sticky bg-white shadow-lg p-6 border border-gray-200 rounded-2xl">
+                <div className="relative bg-gray-100 mb-4 rounded-lg aspect-video overflow-hidden">
+                  <NextImage
+                    src={imagePreviewUrl}
+                    alt="Creative preview"
+                    className="w-full h-full object-contain"
+                    width={320}
+                    height={180}
+                  />
                 </div>
-              </div>
-            )}
-
-            {/* Main Form Content */}
-            <div className="flex-1 min-h-screen">
-              <div className="max-w-6xl mx-auto px-8">
-                {/* Action Bar */}
-                <div className="sticky top-0 z-10 flex items-center mb-8 justify-between bg-white border-gray-200 shadow-lg rounded-2xl p-5">
-                  <div className="flex items-center gap-4">
-                    {/* Auto-save Status */}
-                    <div className="bg-blue-50 px-3 py-1.5 rounded-full">
-                      <span className="flex items-center gap-2 text-sm text-blue-700">
-                        <div className="h-2 w-2 bg-blue-500 rounded-full animate-pulse" />
-                        Auto-save active ({countdown}s)
-                      </span>
-                    </div>
-                    
-                    {/* Firebase Connection Status */}
-                    <div className={`px-3 py-1.5 rounded-full ${isOnline ? 'bg-green-50' : 'bg-red-50'}`}>
-                      <span className={`flex items-center gap-2 text-sm ${isOnline ? 'text-green-700' : 'text-red-700'}`}>
-                        {isOnline ? <Cloud className="h-3 w-3" /> : <CloudOff className="h-3 w-3" />}
-                        {isOnline ? 'Connected' : 'Offline'}
-                      </span>
-                    </div>
-                    
-                    {/* Sync Status */}
-                    {lastSyncTime && isOnline && (
-                      <div className="bg-gray-50 px-3 py-1.5 rounded-full">
-                        <span className="text-xs text-gray-600">
-                          Last sync: {format(lastSyncTime, 'h:mm a')}
-                        </span>
-                      </div>
-                    )}
-                    
-                    {/* Tracking Stats */}
-                    {trackingStats.totalDrafts > 0 && (
-                      <div className="bg-purple-50 px-3 py-1.5 rounded-full">
-                        <span className="text-xs text-purple-700">
-                          {trackingStats.totalDrafts} drafts • {trackingStats.aiPopulatedCount} AI
-                        </span>
-                      </div>
-                    )}
+                <Button
+                  type="button"
+                  className="bg-yellow-400 hover:bg-yellow-500 mb-6 w-full font-medium text-black"
+                  onClick={() => document.getElementById('image-upload')?.click()}
+                >
+                  Replace Image
+                </Button>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Last Updated:</span>
+                    <span className="text-gray-900">
+                      {lastSaved ? format(lastSaved, 'MMM d, h:mm a') : '—'}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-4">
-                    {/* Auto-save Status */}
-
-
-                    {/* AI Autopopulate */}
-                    <FormDropdown
-                      trigger={
-                        <Button variant="outline" disabled={aiLoading} size="sm">
-                          <Sparkles className="h-4 w-4 mr-2" />
-                          AI Autopopulate
-                        </Button>
-                      }
-                      options={[
-                        {
-                          label: 'Fill Empty Fields Only',
-                          description: 'AI will only populate fields that are currently empty',
-                          onClick: () => handleAIAutopopulate('empty')
-                        },
-                        {
-                          label: 'Override All Fields',
-                          description: 'AI will replace all fields, including ones with existing values',
-                          onClick: () => handleAIAutopopulate('all')
-                        }
-                      ]}
-                      className="w-64"
-                      disabled={aiLoading}
-                    />
-
-                    {/* Clear Form */}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      type="button"
-                      onClick={() => {
-                        if (confirm('Are you sure you want to clear all form data?')) {
-                          form.reset()
-                          clearAllAITags()
-                          setShowImage(false)
-                          setImagePreviewUrl(null)
-                          setHasChanges(false)
-                          toast.success('Form cleared')
-                        }
-                      }}
-                    >
-                      Clear Form
-                    </Button>
-
-                    {/* Test Firebase Button - Debug only */}
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={async () => {
-                        // Manual test Firebase save triggered
-                        await performAutoSave()
-                      }}
-                      className="text-purple-600 border-purple-300 hover:bg-purple-50"
-                    >
-                      Test Save
-                    </Button>
-
-                    {/* Submit Button */}
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => {
-                        if (isFormValid()) {
-                          setShowPreviewModal(true)
-                        }
-                      }}
-                      disabled={isSubmitting || !isFormValid()}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                      {isSubmitting ? 'Uploading...' : 'Preview & Upload'}
-                    </Button>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Status:</span>
+                    <span className={isOnline ? 'text-green-600' : 'text-red-600'}>
+                      {isOnline ? '✓ Synced' : '⚠ Offline'}
+                    </span>
                   </div>
-                </div>
-
-                {/* Form Sections */}
-                <div className="space-y-8">
-                  {/* Metadata & Campaign Info */}
-                  <FormCardSection
-                    title="Metadata & Campaign Info"
-                    description="Basic information about the creative and campaign"
-                  >
-                    <FormGrid cols={2}>
-                      <FormInput
-                        name="creativeFilename"
-                        label="Creative Filename"
-                        placeholder="Auto-populated from image"
-                        required
-                        isAIFilled={aiFieldsSet.has('creativeFilename')}
-                      />
-                      <FormInput
-                        name="dateAdded"
-                        label="Date Added to Sheet"
-                        type="date"
-                        readOnly
-                        isAIFilled={aiFieldsSet.has('dateAdded')}
-                      />
-                    </FormGrid>
-
-                    <FormGrid cols={2}>
-                      <FormInput
-                        name="startDate"
-                        label="Start Date"
-                        type="date"
-                        required
-                        isAIFilled={aiFieldsSet.has('startDate')}
-                      />
-                      <FormInput
-                        name="endDate"
-                        label="End Date"
-                        type="date"
-                        required
-                        isAIFilled={aiFieldsSet.has('endDate')}
-                      />
-                    </FormGrid>
-
-                    <FormGrid cols={2}>
-                      <div className="relative">
-                        <FormSelect
-                          name="designer"
-                          label="Designer"
-                          placeholder="Select designer"
-                          options={designers}
-                          required
-                          allowAddNew
-                          onAddNew={(value) => {
-                            const newDesigner = { value: value.toLowerCase().replace(/\s+/g, '-'), label: value }
-                            setDesigners([...designers, newDesigner])
-                          }}
-                          onChange={(value) => handleDropdownChange('designer', value)}
-                          isAIFilled={aiFieldsSet.has('designer')}
-                        />
-                        {reviewNotifications.has('designer') && (
-                          <button
-                            type="button"
-                            className="text-xs text-blue-600 hover:text-blue-700 mt-1 cursor-pointer"
-                            onClick={() => {
-                              const review = pendingReviews.find(r => r.field === 'designer')
-                              if (review) {
-                                setReviewField(review)
-                                setShowReviewModal(true)
-                              }
-                            }}
-                          >
-                            Review
-                          </button>
-                        )}
-                      </div>
-                      <FormSelect
-                        name="litigation"
-                        label="Litigation"
-                        placeholder="Select litigation type"
-                        options={[
-                          { value: 'none', label: 'None' },
-                          { value: 'pending', label: 'Pending' },
-                          { value: 'resolved', label: 'Resolved' }
-                        ]}
-                        isAIFilled={aiFieldsSet.has('litigation')}
-                      />
-                    </FormGrid>
-
-                    <FormSelect
-                      name="campaignName"
-                      label="Campaign Name"
-                      placeholder="Select or add campaign name"
-                      options={campaigns}
-                      allowAddNew
-                      onAddNew={(value) => {
-                        const newCampaign = { value: value.toLowerCase().replace(/\s+/g, '-'), label: value }
-                        setCampaigns([...campaigns, newCampaign])
-                      }}
-                      isAIFilled={aiFieldsSet.has('campaignName')}
-                    />
-
-                    <FormGrid cols={2}>
-                      <FormSwitch
-                        name="markedAsTopAd"
-                        label="Marked as Top Ad?"
-                        isAIFilled={aiFieldsSet.has('markedAsTopAd')}
-                      />
-                      <FormSwitch
-                        name="needsOptimization"
-                        label="Needs Optimization?"
-                        isAIFilled={aiFieldsSet.has('needsOptimization')}
-                      />
-                    </FormGrid>
-                  </FormCardSection>
-
-                  {/* Performance Metrics */}
-                  <FormCardSection
-                    title="Performance Metrics"
-                    description="Analytics and performance data for tracking success"
-                  >
-                    <FormGrid cols={3}>
-                      <FormInput
-                        name="amountSpent"
-                        label="Amount Spent"
-                        type="number"
-                        placeholder="$ 0.00"
-                        prefix="$"
-                        isAIFilled={aiFieldsSet.has('amountSpent')}
-                      />
-                      <FormInput
-                        name="costPerWebsiteLead"
-                        label="Cost per Website Lead"
-                        type="number"
-                        placeholder="$ 0.00"
-                        prefix="$"
-                        isAIFilled={aiFieldsSet.has('costPerWebsiteLead')}
-                      />
-                      <FormInput
-                        name="costPerClick"
-                        label="Cost per Click"
-                        type="number"
-                        placeholder="$ 0.00"
-                        prefix="$"
-                        isAIFilled={aiFieldsSet.has('costPerClick')}
-                      />
-                    </FormGrid>
-                  </FormCardSection>
-
-                  {/* Message & Targeting Insights */}
-                  <FormCardSection
-                    title="Message & Targeting Insights"
-                    description="Audience targeting and message conditioning details"
-                  >
-                    <FormGrid cols={2}>
-                      <FormSelect
-                        name="creativeLayoutType"
-                        label="Creative Layout Type"
-                        placeholder="Select or add layout type"
-                        options={CREATIVE_LAYOUT_TYPE_OPTIONS}
-                        allowAddNew
-                        isAIFilled={aiFieldsSet.has('creativeLayoutType')}
-                      />
-                      <FormSelect
-                        name="messagingStructure"
-                        label="Messaging Structure"
-                        placeholder="Select or add messaging structure"
-                        options={MESSAGING_STRUCTURE_OPTIONS}
-                        allowAddNew
-                        isAIFilled={aiFieldsSet.has('messagingStructure')}
-                      />
-                    </FormGrid>
-
-                    <FormGrid cols={2}>
-                      <FormSelect
-                        name="imageryType"
-                        label="Imagery Type"
-                        placeholder="Select or add imagery type"
-                        options={IMAGERY_TYPE_OPTIONS}
-                        allowAddNew
-                        isAIFilled={aiFieldsSet.has('imageryType')}
-                      />
-                      <FormSelect
-                        name="imageryBackground"
-                        label="Imagery Background"
-                        placeholder="Select or add imagery background"
-                        options={IMAGERY_BACKGROUND_OPTIONS}
-                        allowAddNew
-                        isAIFilled={aiFieldsSet.has('imageryBackground')}
-                      />
-                    </FormGrid>
-
-                    <FormGrid cols={3}>
-                      <FormSwitch
-                        name="questionBasedHeadline"
-                        label="Question-Based Headline?"
-                        isAIFilled={aiFieldsSet.has('questionBasedHeadline')}
-                      />
-                      <FormSwitch
-                        name="clientBranding"
-                        label="Client Branding?"
-                        isAIFilled={aiFieldsSet.has('clientBranding')}
-                      />
-                      <FormSwitch
-                        name="iconsUsed"
-                        label="Icons Used?"
-                        isAIFilled={aiFieldsSet.has('iconsUsed')}
-                      />
-                    </FormGrid>
-                  </FormCardSection>
-
-                  {/* Headline & CTA */}
-                  <FormCardSection
-                    title="Headline & CTA"
-                    description="Main headline and call-to-action configuration"
-                  >
-                    <FormGrid cols={2}>
-                      <FormInput
-                        name="preheadlineText"
-                        label="Preheadline Text"
-                        placeholder="Enter preheadline text"
-                        isAIFilled={aiFieldsSet.has('preheadlineText')}
-                      />
-                      <FormInput
-                        name="headlineText"
-                        label="Headline Text"
-                        placeholder="Enter headline text"
-                        required
-                        isAIFilled={aiFieldsSet.has('headlineText')}
-                      />
-                    </FormGrid>
-
-                    <FormGrid cols={2}>
-                      <FormInput
-                        name="ctaLabel"
-                        label="CTA Label"
-                        placeholder="Enter CTA label"
-                        isAIFilled={aiFieldsSet.has('ctaLabel')}
-                      />
-                      <FormSelect
-                        name="ctaVerb"
-                        label="CTA Verb"
-                        placeholder="Select or add CTA verb"
-                        options={CTA_VERB_OPTIONS}
-                        allowAddNew
-                        onChange={(value) => handleDropdownChange('ctaVerb', value)}
-                        isAIFilled={aiFieldsSet.has('ctaVerb')}
-                      />
-                    </FormGrid>
-
-                    <FormGrid cols={2}>
-                      <FormSelect
-                        name="ctaStyleGroup"
-                        label="CTA Style Group"
-                        placeholder="Select or add CTA style"
-                        options={CTA_STYLE_GROUP_OPTIONS}
-                        allowAddNew
-                        isAIFilled={aiFieldsSet.has('ctaStyleGroup')}
-                      />
-                      <FormSelect
-                        name="ctaPosition"
-                        label="CTA Position"
-                        placeholder="Select or add CTA position"
-                        options={CTA_POSITION_OPTIONS}
-                        allowAddNew
-                        isAIFilled={aiFieldsSet.has('ctaPosition')}
-                      />
-                    </FormGrid>
-
-                    <FormGrid cols={2}>
-                      <FormSelect
-                        name="headlineIntent"
-                        label="Headline Intent"
-                        placeholder="Select or add headline intent"
-                        options={HEADLINE_INTENT_OPTIONS}
-                        allowAddNew
-                        isAIFilled={aiFieldsSet.has('headlineIntent')}
-                      />
-                      <FormSelect
-                        name="ctaColor"
-                        label="CTA Color"
-                        placeholder="Select or add CTA color"
-                        options={CTA_COLOR_OPTIONS}
-                        allowAddNew
-                        isAIFilled={aiFieldsSet.has('ctaColor')}
-                      />
-                    </FormGrid>
-
-                    <FormSelect
-                      name="headlineTags"
-                      label="Headline Tags"
-                      placeholder="Select or add headline tags"
-                      options={HEADLINE_TEXT_OPTIONS}
-                      allowAddNew
-                      isAIFilled={aiFieldsSet.has('headlineTags')}
-                    />
-                  </FormCardSection>
-
-                  {/* Copy Drivers & Content Elements */}
-                  <FormCardSection
-                    title="Copy Drivers & Content Elements"
-                    description="Content copy elements and creative categorization"
-                  >
-                    <FormTextarea
-                      name="bodyCopySummary"
-                      label="Body Copy Summary"
-                      placeholder="Summarize the main body copy and key messages"
-                      rows={4}
-                      isAIFilled={aiFieldsSet.has('bodyCopySummary')}
-                    />
-
-                    <FormGrid cols={2}>
-                      <FormSelect
-                        name="copyAngle"
-                        label="Copy Angle"
-                        placeholder="Select or add copy angle"
-                        options={COPY_ANGLE_OPTIONS}
-                        allowAddNew
-                        isAIFilled={aiFieldsSet.has('copyAngle')}
-                      />
-                      <FormSelect
-                        name="copyTone"
-                        label="Copy Tone"
-                        placeholder="Select or add copy tone"
-                        options={COPY_TONE_OPTIONS}
-                        allowAddNew
-                        isAIFilled={aiFieldsSet.has('copyTone')}
-                      />
-                    </FormGrid>
-
-                    <FormGrid cols={2}>
-                      <FormSelect
-                        name="audiencePersona"
-                        label="Audience Persona"
-                        placeholder="Select or add audience persona"
-                        options={AUDIENCE_PERSONA_OPTIONS}
-                        allowAddNew
-                        onChange={(value) => handleDropdownChange('audiencePersona', value)}
-                        isAIFilled={aiFieldsSet.has('audiencePersona')}
-                      />
-                      <FormSelect
-                        name="campaignTrigger"
-                        label="Campaign Trigger"
-                        placeholder="Select or add campaign trigger"
-                        options={CAMPAIGN_TRIGGER_OPTIONS}
-                        allowAddNew
-                        isAIFilled={aiFieldsSet.has('campaignTrigger')}
-                      />
-                    </FormGrid>
-
-                    <FormGrid cols={2}>
-                      <FormSwitch name="legalLanguage" label="Legal Language?" isAIFilled={aiFieldsSet.has('legalLanguage')} />
-                      <FormSwitch name="emotionalStatement" label="Emotional Statement?" isAIFilled={aiFieldsSet.has('emotionalStatement')} />
-                      <FormSwitch name="dollarAmount" label="Dollar Amount?" isAIFilled={aiFieldsSet.has('dollarAmount')} />
-                      <FormSwitch name="starMentioned" label="Star Mentioned?" isAIFilled={aiFieldsSet.has('starMentioned')} />
-                      <FormSwitch name="disclaimer" label="Disclaimer?" isAIFilled={aiFieldsSet.has('disclaimer')} />
-                      <FormSwitch name="complianceListed" label="Compliance Listed?" isAIFilled={aiFieldsSet.has('complianceListed')} />
-                    </FormGrid>
-                  </FormCardSection>
-
-                  {/* Additional Information */}
-                  <FormCardSection
-                    title="Additional Information"
-                    description="Designer notes and additional documentation"
-                  >
-                    <FormTextarea
-                      name="designerRemarks"
-                      label="Designer Remarks"
-                      placeholder="Add any designer notes or remarks"
-                      rows={4}
-                      isAIFilled={aiFieldsSet.has('designerRemarks')}
-                    />
-
-                    <FormTextarea
-                      name="internalNotes"
-                      label="Internal Notes"
-                      placeholder="Add internal notes or team communication"
-                      rows={4}
-                      isAIFilled={aiFieldsSet.has('internalNotes')}
-                    />
-
-                    <FormInput
-                      name="uploadGoogleDocLink"
-                      label="Upload Google Doc Link"
-                      type="url"
-                      placeholder="https://docs.google.com/..."
-                      isAIFilled={aiFieldsSet.has('uploadGoogleDocLink')}
-                    />
-
-                    <FormSwitch
-                      name="pinNoteForStrategySync"
-                      label="Pin Note for Strategy Sync"
-                      isAIFilled={aiFieldsSet.has('pinNoteForStrategySync')}
-                    />
-                  </FormCardSection>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Review Modal for Similar Values */}
-          <FormDialog
-            isOpen={showReviewModal}
-            onOpenChange={setShowReviewModal}
-            title="Review AI Suggestion"
-            description="The AI suggested a value similar to an existing option. Please choose:"
-            maxWidth="sm"
-          >
-            {reviewField && (
-              <div className="space-y-4">
-                <div className="p-3 bg-gray-50 rounded-lg text-sm">
-                  <span className="font-medium">Field: </span>
-                  <span className="text-gray-600">
-                    {reviewField.field === 'designer' ? 'Designer' :
-                      reviewField.field === 'audiencePersona' ? 'Audience Persona' :
-                        reviewField.field}
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start hover:bg-purple-50 border-purple-200"
-                    onClick={() => {
-                      // Use AI value and add to dropdown
-                      if (reviewField.field === 'designer') {
-                        const newDesigner = {
-                          value: reviewField.aiValue.toLowerCase().replace(/\s+/g, '-'),
-                          label: reviewField.aiValue
-                        }
-                        setDesigners([...designers, newDesigner])
-                        form.setValue('designer', newDesigner.value)
-                        markFieldAsAI('designer')
-                      } else if (reviewField.field === 'audiencePersona') {
-                        // Add new audience persona option
-                        const newPersona = {
-                          value: reviewField.aiValue.toLowerCase().replace(/\s+/g, '-'),
-                          label: reviewField.aiValue
-                        }
-                        AUDIENCE_PERSONA_OPTIONS.push(newPersona)
-                        form.setValue('audiencePersona', newPersona.value)
-                        markFieldAsAI('audiencePersona')
-                      }
-
-                      // Remove from review notifications
-                      setReviewNotifications(prev => {
-                        const newSet = new Set(prev)
-                        newSet.delete(reviewField.field)
-                        return newSet
-                      })
-
-                      // Check if there are more reviews pending
-                      const remainingReviews = pendingReviews.filter(r => r.field !== reviewField.field)
-                      if (remainingReviews.length > 0) {
-                        setReviewField(remainingReviews[0])
-                        setPendingReviews(remainingReviews)
-                      } else {
-                        setShowReviewModal(false)
-                        setReviewField(null)
-                        setPendingReviews([])
-                      }
-
-                      toast.success(`Added "${reviewField.aiValue}" as new option`)
-                    }}
-                  >
-                    <div className="text-left">
-                      <div className="font-medium flex items-center gap-2">
-                        <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full">AI</span>
-                        {reviewField.aiValue}
-                      </div>
-                      <div className="text-sm text-gray-500">Add as new option to tag glossary</div>
-                    </div>
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start hover:bg-blue-50 border-blue-200"
-                    onClick={() => {
-                      // Use existing value from tag glossary
-                      if (reviewField.field === 'designer') {
-                        const existing = designers.find(d => d.label === reviewField.suggestedValue)
-                        if (existing) {
-                          form.setValue('designer', existing.value)
-                          // Don't add AI tag for glossary selection
-                        }
-                      } else if (reviewField.field === 'audiencePersona') {
-                        const existing = AUDIENCE_PERSONA_OPTIONS.find(p => p.label === reviewField.suggestedValue)
-                        if (existing) {
-                          form.setValue('audiencePersona', existing.value)
-                        }
-                      }
-
-                      // Remove from review notifications
-                      setReviewNotifications(prev => {
-                        const newSet = new Set(prev)
-                        newSet.delete(reviewField.field)
-                        return newSet
-                      })
-
-                      // Check if there are more reviews pending
-                      const remainingReviews = pendingReviews.filter(r => r.field !== reviewField.field)
-                      if (remainingReviews.length > 0) {
-                        setReviewField(remainingReviews[0])
-                        setPendingReviews(remainingReviews)
-                      } else {
-                        setShowReviewModal(false)
-                        setReviewField(null)
-                        setPendingReviews([])
-                      }
-
-                      toast.success(`Using existing option "${reviewField.suggestedValue}"`)
-                    }}
-                  >
-                    <div className="text-left">
-                      <div className="font-medium flex items-center gap-2">
-                        <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">Tag</span>
-                        {reviewField.suggestedValue}
-                      </div>
-                      <div className="text-sm text-gray-500">Use existing option from tag glossary</div>
-                    </div>
-                  </Button>
-                </div>
-
-                {pendingReviews.length > 1 && (
-                  <div className="text-xs text-gray-500 text-center">
-                    {pendingReviews.length - 1} more field{pendingReviews.length - 1 > 1 ? 's' : ''} to review
+          {/* Main Content */}
+          <div className="flex-1 min-h-screen">
+            <div className="mx-auto px-8 max-w-6xl">
+              {/* Action Bar */}
+              <div className="top-0 z-10 sticky flex justify-between items-center bg-white shadow-lg mb-8 p-5 rounded-2xl">
+                <div className="flex items-center gap-4">
+                  <div className="bg-blue-50 px-3 py-1.5 rounded-full">
+                    <span className="flex items-center gap-2 text-blue-700 text-sm">
+                      <div className="bg-blue-500 rounded-full w-2 h-2 animate-pulse" />
+                      Auto-save active
+                    </span>
                   </div>
-                )}
+                  <AIStatusIndicator />
+                </div>
+                <div className="flex items-center gap-4">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" disabled={aiLoading}>
+                        <Sparkles className="mr-2 w-4 h-4" />
+                        {aiLoading ? 'Analyzing...' : 'AI Autopopulate'}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onClick={() => executeAIAutopopulate('empty')}>
+                        Fill Empty Fields Only
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {
+                        setPendingAIMode('all')
+                        setShowOverwriteConfirm(true)
+                      }}>
+                        Override All Fields
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (confirm('Clear all form data?')) {
+                        form.reset()
+                        clearAllAITags()
+                        setShowImage(false)
+                        setImagePreviewUrl(null)
+                        toast.success('Form cleared')
+                      }
+                    }}
+                  >
+                    Clear Form
+                  </Button>
+                  
+                  <Button
+                    onClick={() => setShowPreviewModal(true)}
+                    disabled={isSubmitting || !isFormValid()}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    {isSubmitting ? 'Uploading...' : 'Preview & Upload'}
+                  </Button>
+                </div>
               </div>
-            )}
-          </FormDialog>
 
-          {/* Overwrite Confirmation Modal */}
-          <FormDialog
-            isOpen={showOverwriteConfirm}
-            onOpenChange={setShowOverwriteConfirm}
-            title="Confirm Overwrite"
-            description="Are you sure you want to overwrite existing fields?"
-            maxWidth="sm"
-            footer={
-              <>
-                <Button variant="outline" onClick={() => {
-                  setShowOverwriteConfirm(false)
-                  setPendingAIMode(null)
-                }}>
-                  Cancel
-                </Button>
-                <Button variant="destructive" onClick={() => {
+              {/* Form Sections */}
+              <div className="space-y-8">
+                {/* Metadata Section */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Metadata & Campaign Info</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormFieldWrapper label="Creative Filename" required isAIFilled={aiFieldsSet.has('creativeFilename')}>
+                        <Input {...form.register('creativeFilename')} placeholder="Auto-populated from image" />
+                      </FormFieldWrapper>
+                      <FormFieldWrapper label="Date Added" isAIFilled={aiFieldsSet.has('dateAdded')}>
+                        <Input {...form.register('dateAdded')} type="date" readOnly />
+                      </FormFieldWrapper>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormFieldWrapper label="Start Date" required isAIFilled={aiFieldsSet.has('startDate')}>
+                        <Input {...form.register('startDate')} type="date" />
+                      </FormFieldWrapper>
+                      <FormFieldWrapper label="End Date" required isAIFilled={aiFieldsSet.has('endDate')}>
+                        <Input {...form.register('endDate')} type="date" />
+                      </FormFieldWrapper>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormFieldWrapper 
+                        label="Designer" 
+                        required 
+                        isAIFilled={aiFieldsSet.has('designer')}
+                        aiSuggestion={aiSuggestions.designer}
+                        onAcceptSuggestion={() => acceptAiSuggestion('designer', addDesignerTag)}
+                        onDismissSuggestion={() => dismissAiSuggestion('designer')}
+                      >
+                        <SearchableSelect
+                          value={form.watch('designer')}
+                          onChange={(value) => form.setValue('designer', value as string)}
+                          placeholder="Select or type to add designer"
+                          fieldName="designer"
+                        />
+                      </FormFieldWrapper>
+                      <FormFieldWrapper 
+                        label="Litigation Name" 
+                        required 
+                        isAIFilled={aiFieldsSet.has('litigationName')}
+                        aiSuggestion={aiSuggestions.litigationName}
+                        onAcceptSuggestion={() => acceptAiSuggestion('litigationName', addLitigationTag)}
+                        onDismissSuggestion={() => dismissAiSuggestion('litigationName')}
+                      >
+                        <SearchableSelect
+                          value={form.watch('litigationName')}
+                          onChange={(value) => form.setValue('litigationName', value as string)}
+                          placeholder="Select or type to add litigation"
+                          fieldName="litigationName"
+                        />
+                      </FormFieldWrapper>
+                    </div>
+
+                    <FormFieldWrapper 
+                      label="Campaign Type" 
+                      required 
+                      isAIFilled={aiFieldsSet.has('campaignType')}
+                      aiSuggestion={aiSuggestions.campaignType}
+                      onAcceptSuggestion={() => acceptAiSuggestion('campaignType', addCampaignTypeTag)}
+                      onDismissSuggestion={() => dismissAiSuggestion('campaignType')}
+                    >
+                      <SearchableSelect
+                        value={form.watch('campaignType')}
+                        onChange={(value) => form.setValue('campaignType', value as string)}
+                        placeholder="Select or type to add campaign type"
+                        fieldName="campaignType"
+                      />
+                    </FormFieldWrapper>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={form.watch('markedAsTopAd')}
+                          onCheckedChange={(checked) => {
+                            form.setValue('markedAsTopAd', checked)
+                            removeAITag('markedAsTopAd')
+                          }}
+                        />
+                        <Label>Marked as Top Ad?</Label>
+                        {aiFieldsSet.has('markedAsTopAd') && form.watch('markedAsTopAd') === true && <AIBadge />}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={form.watch('needsOptimization')}
+                          onCheckedChange={(checked) => {
+                            form.setValue('needsOptimization', checked)
+                            removeAITag('needsOptimization')
+                          }}
+                        />
+                        <Label>Needs Optimization?</Label>
+                        {aiFieldsSet.has('needsOptimization') && form.watch('needsOptimization') === true && <AIBadge />}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Performance Metrics */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Performance Metrics</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-3 gap-4">
+                      <FormFieldWrapper label="Amount Spent" required>
+                        <Input {...form.register('amountSpent')} type="number" placeholder="0.00" />
+                      </FormFieldWrapper>
+                      <FormFieldWrapper label="Cost per Website Lead" required>
+                        <Input {...form.register('costPerWebsiteLead')} type="number" placeholder="0.00" />
+                      </FormFieldWrapper>
+                      <FormFieldWrapper label="Cost per Click" required>
+                        <Input {...form.register('costPerClick')} type="number" placeholder="0.00" />
+                      </FormFieldWrapper>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Message & Targeting */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Message & Targeting Insights</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormFieldWrapper 
+                        label="Creative Layout Type" 
+                        isAIFilled={aiFieldsSet.has('creativeLayoutType')}
+                        aiSuggestion={aiSuggestions.creativeLayoutType}
+                        onAcceptSuggestion={() => acceptAiSuggestion('creativeLayoutType', addLayoutTypeTag)}
+                        onDismissSuggestion={() => dismissAiSuggestion('creativeLayoutType')}
+                      >
+                        <SearchableSelect
+                          value={form.watch('creativeLayoutType') || ''}
+                          onChange={(value) => form.setValue('creativeLayoutType', value as string)}
+                          placeholder="Search or type to add layout"
+                          fieldName="creativeLayoutType"
+                        />
+                      </FormFieldWrapper>
+                      <FormFieldWrapper 
+                        label="Messaging Structure" 
+                        isAIFilled={aiFieldsSet.has('messagingStructure')}
+                        aiSuggestion={aiSuggestions.messagingStructure}
+                        onAcceptSuggestion={() => acceptAiSuggestion('messagingStructure', addMessagingTag)}
+                        onDismissSuggestion={() => dismissAiSuggestion('messagingStructure')}
+                      >
+                        <SearchableSelect
+                          value={form.watch('messagingStructure') || ''}
+                          onChange={(value) => form.setValue('messagingStructure', value as string)}
+                          placeholder="Search or type to add messaging"
+                          fieldName="messagingStructure"
+                        />
+                      </FormFieldWrapper>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormFieldWrapper label="Imagery Type" isAIFilled={aiFieldsSet.has('imageryType')}>
+                        <SearchableSelect
+                          value={form.watch('imageryType')}
+                          onChange={(value) => form.setValue('imageryType', value as string[])}
+                          placeholder="Search or type to add imagery"
+                          multiple
+                          fieldName="imageryType"
+                        />
+                      </FormFieldWrapper>
+                      <FormFieldWrapper label="Imagery Background" isAIFilled={aiFieldsSet.has('imageryBackground')}>
+                        <SearchableSelect
+                          value={form.watch('imageryBackground')}
+                          onChange={(value) => form.setValue('imageryBackground', value as string[])}
+                          placeholder="Search or type to add background"
+                          multiple
+                          fieldName="imageryBackground"
+                        />
+                      </FormFieldWrapper>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={form.watch('questionBasedHeadline')}
+                          onCheckedChange={(checked) => {
+                            form.setValue('questionBasedHeadline', checked)
+                            removeAITag('questionBasedHeadline')
+                          }}
+                        />
+                        <Label>Question-Based Headline?</Label>
+                        {aiFieldsSet.has('questionBasedHeadline') && form.watch('questionBasedHeadline') === true && <AIBadge />}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={form.watch('clientBranding')}
+                          onCheckedChange={(checked) => {
+                            form.setValue('clientBranding', checked)
+                            removeAITag('clientBranding')
+                          }}
+                        />
+                        <Label>Client Branding?</Label>
+                        {aiFieldsSet.has('clientBranding') && form.watch('clientBranding') === true && <AIBadge />}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={form.watch('iconsUsed')}
+                          onCheckedChange={(checked) => {
+                            form.setValue('iconsUsed', checked)
+                            removeAITag('iconsUsed')
+                          }}
+                        />
+                        <Label>Icons Used?</Label>
+                        {aiFieldsSet.has('iconsUsed') && form.watch('iconsUsed') === true && <AIBadge />}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Headlines & CTA */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Headline & CTA</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormFieldWrapper label="Preheadline Text" isAIFilled={aiFieldsSet.has('preheadlineText')}>
+                        <Input {...form.register('preheadlineText')} placeholder="Enter preheadline" />
+                      </FormFieldWrapper>
+                      <FormFieldWrapper label="Headline Text" isAIFilled={aiFieldsSet.has('headlineText')}>
+                        <Input {...form.register('headlineText')} placeholder="Enter headline" />
+                      </FormFieldWrapper>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormFieldWrapper label="CTA Label" isAIFilled={aiFieldsSet.has('ctaLabel')}>
+                        <Input {...form.register('ctaLabel')} placeholder="Enter CTA label" />
+                      </FormFieldWrapper>
+                      <FormFieldWrapper 
+                        label="CTA Verb" 
+                        isAIFilled={aiFieldsSet.has('ctaVerb')}
+                        aiSuggestion={aiSuggestions.ctaVerb}
+                        onAcceptSuggestion={() => acceptAiSuggestion('ctaVerb', addCtaVerbTag)}
+                        onDismissSuggestion={() => dismissAiSuggestion('ctaVerb')}
+                      >
+                        <SearchableSelect
+                          value={form.watch('ctaVerb') || ''}
+                          onChange={(value) => form.setValue('ctaVerb', value as string)}
+                          placeholder="Search or type to add CTA verb"
+                          fieldName="ctaVerb"
+                        />
+                      </FormFieldWrapper>
+                    </div>
+
+                    <FormFieldWrapper label="Headline Tags" isAIFilled={aiFieldsSet.has('headlineTags')}>
+                      <SearchableSelect
+                        value={form.watch('headlineTags')}
+                        onChange={(value) => form.setValue('headlineTags', value as string[])}
+                        placeholder="Search or type to add tags"
+                        multiple
+                        fieldName="headlineTags"
+                      />
+                    </FormFieldWrapper>
+                  </CardContent>
+                </Card>
+
+                {/* Copy Elements */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Copy Drivers & Content Elements</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <FormFieldWrapper label="Body Copy Summary" isAIFilled={aiFieldsSet.has('bodyCopySummary')}>
+                      <Textarea {...form.register('bodyCopySummary')} placeholder="Summarize the main body copy" rows={4} />
+                    </FormFieldWrapper>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormFieldWrapper label="Copy Angle" isAIFilled={aiFieldsSet.has('copyAngle')}>
+                        <SearchableSelect
+                          value={form.watch('copyAngle')}
+                          onChange={(value) => form.setValue('copyAngle', value as string[])}
+                          placeholder="Search or type to add angles"
+                          multiple
+                          fieldName="copyAngle"
+                        />
+                      </FormFieldWrapper>
+                      <FormFieldWrapper label="Copy Tone" isAIFilled={aiFieldsSet.has('copyTone')}>
+                        <SearchableSelect
+                          value={form.watch('copyTone')}
+                          onChange={(value) => form.setValue('copyTone', value as string[])}
+                          placeholder="Search or type to add tones"
+                          multiple
+                          fieldName="copyTone"
+                        />
+                      </FormFieldWrapper>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={form.watch('legalLanguage')}
+                          onCheckedChange={(checked) => {
+                            form.setValue('legalLanguage', checked)
+                            removeAITag('legalLanguage')
+                          }}
+                        />
+                        <Label>Legal Language?</Label>
+                        {aiFieldsSet.has('legalLanguage') && form.watch('legalLanguage') === true && <AIBadge />}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={form.watch('emotionalStatement')}
+                          onCheckedChange={(checked) => {
+                            form.setValue('emotionalStatement', checked)
+                            removeAITag('emotionalStatement')
+                          }}
+                        />
+                        <Label>Emotional Statement?</Label>
+                        {aiFieldsSet.has('emotionalStatement') && form.watch('emotionalStatement') === true && <AIBadge />}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={form.watch('dollarAmount')}
+                          onCheckedChange={(checked) => {
+                            form.setValue('dollarAmount', checked)
+                            removeAITag('dollarAmount')
+                          }}
+                        />
+                        <Label>$ Amount Mentioned?</Label>
+                        {aiFieldsSet.has('dollarAmount') && form.watch('dollarAmount') === true && <AIBadge />}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={form.watch('disclaimer')}
+                          onCheckedChange={(checked) => {
+                            form.setValue('disclaimer', checked)
+                            removeAITag('disclaimer')
+                          }}
+                        />
+                        <Label>Disclaimer?</Label>
+                        {aiFieldsSet.has('disclaimer') && form.watch('disclaimer') === true && <AIBadge />}
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 mt-4">
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={form.watch('statMentioned')}
+                          onCheckedChange={(checked) => {
+                            form.setValue('statMentioned', checked)
+                            removeAITag('statMentioned')
+                          }}
+                        />
+                        <Label>Stat Mentioned?</Label>
+                        {aiFieldsSet.has('statMentioned') && form.watch('statMentioned') === true && <AIBadge />}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={form.watch('conditionsListed')}
+                          onCheckedChange={(checked) => {
+                            form.setValue('conditionsListed', checked)
+                            removeAITag('conditionsListed')
+                          }}
+                        />
+                        <Label>Conditions Listed?</Label>
+                        {aiFieldsSet.has('conditionsListed') && form.watch('conditionsListed') === true && <AIBadge />}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Additional Info */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Additional Information</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <FormFieldWrapper label="Designer Remarks" isAIFilled={aiFieldsSet.has('designerRemarks')}>
+                      <Textarea {...form.register('designerRemarks')} placeholder="Add designer notes" rows={4} />
+                    </FormFieldWrapper>
+                    <FormFieldWrapper label="Internal Notes" isAIFilled={aiFieldsSet.has('internalNotes')}>
+                      <Textarea {...form.register('internalNotes')} placeholder="Add internal notes" rows={4} />
+                    </FormFieldWrapper>
+                    <FormFieldWrapper label="Google Doc Link" isAIFilled={aiFieldsSet.has('uploadGoogleDocLink')}>
+                      <Input {...form.register('uploadGoogleDocLink')} type="url" placeholder="https://docs.google.com/..." />
+                    </FormFieldWrapper>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Confirmation Dialogs */}
+        <Dialog open={showOverwriteConfirm} onOpenChange={setShowOverwriteConfirm}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirm Overwrite</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to overwrite existing fields? This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowOverwriteConfirm(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
                   if (pendingAIMode) {
                     executeAIAutopopulate(pendingAIMode)
                   }
-                  setPendingAIMode(null)
                   setShowOverwriteConfirm(false)
-                }}>
-                  Confirm
-                </Button>
-              </>
-            }
-          >
-            <div className="font-semibold text-red-600">This action cannot be undone.</div>
-          </FormDialog>
+                }}
+              >
+                Confirm
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-          {/* Preview Modal */}
-          <FormDialog
-            isOpen={showPreviewModal}
-            onOpenChange={setShowPreviewModal}
-            title="Preview Creative Upload"
-            description="Review all information before uploading"
-            maxWidth="4xl"
-            className="max-h-[80vh] overflow-y-auto"
-            footer={
-              <>
-                <Button variant="outline" onClick={() => setShowPreviewModal(false)}>
-                  Back to Edit
-                </Button>
-                <Button
-                  onClick={() => {
-                    setShowPreviewModal(false)
-                    form.handleSubmit(handleSubmit)()
-                  }}
-                  disabled={isSubmitting}
-                  className="bg-[#89DA1A] hover:bg-[#7BC515] text-white"
-                >
-                  {isSubmitting ? 'Uploading...' : 'Confirm Upload'}
-                </Button>
-              </>
-            }
-          >
-
-            <div className="space-y-6 mt-4">
-              {/* Preview Image */}
+        {/* Preview Modal */}
+        <Dialog open={showPreviewModal} onOpenChange={setShowPreviewModal}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Preview Creative Upload</DialogTitle>
+              <DialogDescription>Review all information before uploading</DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 mt-4">
               {imagePreviewUrl && (
-                <div className="border rounded-lg p-4">
-                  <h3 className="font-semibold mb-2">Image Preview</h3>
-                  <img
+                <div className="p-4 border rounded-lg">
+                  <h3 className="mb-2 font-semibold">Image Preview</h3>
+                  <NextImage
                     src={imagePreviewUrl}
                     alt="Creative preview"
-                    className="max-w-full h-auto max-h-64 object-contain mx-auto"
+                    className="mx-auto max-w-full h-auto max-h-64 object-contain"
+                    width={400}
+                    height={256}
                   />
                 </div>
               )}
 
-              {/* Metadata */}
-              <div className="border rounded-lg p-4 space-y-3">
-                <h3 className="font-semibold mb-2">Metadata & Campaign Info</h3>
-                <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="p-4 border rounded-lg">
+                <h3 className="mb-2 font-semibold">Campaign Details</h3>
+                <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
                     <span className="font-medium text-gray-600">Filename:</span>
                     <span className="ml-2">{form.getValues('creativeFilename')}</span>
                   </div>
                   <div>
                     <span className="font-medium text-gray-600">Designer:</span>
-                    <span className="ml-2">{designers.find(d => d.value === form.getValues('designer'))?.label}</span>
+                    <span className="ml-2">{form.getValues('designer')}</span>
                   </div>
                   <div>
-                    <span className="font-medium text-gray-600">Start Date:</span>
-                    <span className="ml-2">{form.getValues('startDate')}</span>
+                    <span className="font-medium text-gray-600">Campaign Type:</span>
+                    <span className="ml-2">{form.getValues('campaignType')}</span>
                   </div>
                   <div>
-                    <span className="font-medium text-gray-600">End Date:</span>
-                    <span className="ml-2">{form.getValues('endDate')}</span>
-                  </div>
-                  {form.getValues('campaignName') && (
-                    <div>
-                      <span className="font-medium text-gray-600">Campaign:</span>
-                      <span className="ml-2">{campaigns.find(c => c.value === form.getValues('campaignName'))?.label}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Performance Metrics */}
-              {(form.getValues('spend') || form.getValues('revenue') || form.getValues('roas')) && (
-                <div className="border rounded-lg p-4 space-y-3">
-                  <h3 className="font-semibold mb-2">Performance Metrics</h3>
-                  <div className="grid grid-cols-3 gap-3 text-sm">
-                    {form.getValues('spend') && (
-                      <div>
-                        <span className="font-medium text-gray-600">Spend:</span>
-                        <span className="ml-2">${form.getValues('spend')}</span>
-                      </div>
-                    )}
-                    {form.getValues('revenue') && (
-                      <div>
-                        <span className="font-medium text-gray-600">Revenue:</span>
-                        <span className="ml-2">${form.getValues('revenue')}</span>
-                      </div>
-                    )}
-                    {form.getValues('roas') && (
-                      <div>
-                        <span className="font-medium text-gray-600">ROAS:</span>
-                        <span className="ml-2">${form.getValues('roas')}</span>
-                      </div>
-                    )}
+                    <span className="font-medium text-gray-600">Litigation:</span>
+                    <span className="ml-2">{form.getValues('litigationName')}</span>
                   </div>
                 </div>
-              )}
-
-              {/* Headline & Copy */}
-              <div className="border rounded-lg p-4 space-y-3">
-                <h3 className="font-semibold mb-2">Headline & Copy</h3>
-                <div className="space-y-2 text-sm">
-                  {form.getValues('preheadline') && (
-                    <div>
-                      <span className="font-medium text-gray-600">Preheadline:</span>
-                      <p className="mt-1">{form.getValues('preheadline')}</p>
-                    </div>
-                  )}
-                  <div>
-                    <span className="font-medium text-gray-600">Headline:</span>
-                    <p className="mt-1 font-medium">{form.getValues('headline')}</p>
-                  </div>
-                  {form.getValues('bodyCopySummary') && (
-                    <div>
-                      <span className="font-medium text-gray-600">Body Copy Summary:</span>
-                      <p className="mt-1">{form.getValues('bodyCopySummary')}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Tags & Categories */}
-              <div className="border rounded-lg p-4 space-y-3">
-                <h3 className="font-semibold mb-2">Tags & Categories</h3>
-                <div className="space-y-2">
-                  {form.getValues('imageryType').length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      <span className="text-sm font-medium text-gray-600 mr-2">Imagery:</span>
-                      {form.getValues('imageryType').map((tag: string) => (
-                        <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
-                      ))}
-                    </div>
-                  )}
-                  {form.getValues('headlineTags').length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      <span className="text-sm font-medium text-gray-600 mr-2">Headline Tags:</span>
-                      {form.getValues('headlineTags').map((tag: string) => (
-                        <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
-                      ))}
-                    </div>
-                  )}
-                  {form.getValues('tone').length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      <span className="text-sm font-medium text-gray-600 mr-2">Tone:</span>
-                      {form.getValues('tone').map((tag: string) => (
-                        <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Status Indicators */}
-              <div className="flex items-center gap-4 text-sm">
-                {form.getValues('markedAsTopAd') && (
-                  <Badge className="bg-green-100 text-green-800">Top Ad</Badge>
-                )}
-                {form.getValues('needsOptimization') && (
-                  <Badge className="bg-yellow-100 text-yellow-800">Needs Optimization</Badge>
-                )}
-                {form.getValues('pinNote') && (
-                  <Badge className="bg-blue-100 text-blue-800">Pinned</Badge>
-                )}
               </div>
             </div>
 
-          </FormDialog>
-
-          {/* Load Draft Dialog */}
-          <FormDialog
-            isOpen={showDrafts}
-            onOpenChange={setShowDrafts}
-            title="Load Draft"
-            description="Select a draft to load"
-          >
-            <ScrollArea className="max-h-96">
-              <div className="space-y-2">
-                {getAllDrafts().map((draft) => (
-                  <Button
-                    key={draft.id}
-                    variant="outline"
-                    className="w-full justify-start"
-                    onClick={() => handleLoadDraft(draft.id)}
-                  >
-                    <div className="text-left flex-1">
-                      <div className="font-medium flex items-center gap-2">
-                        {draft.filename}
-                        {draft.autoSaved && (
-                          <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">Auto</span>
-                        )}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {format(new Date(draft.savedAt), 'MMM d, yyyy h:mm a')}
-                      </div>
-                    </div>
-                  </Button>
-                ))}
-                {getAllDrafts().length === 0 && (
-                  <p className="text-center text-gray-500 py-4">No drafts found</p>
-                )}
-              </div>
-            </ScrollArea>
-          </FormDialog>
-
-
-
-        </form>
-      </FormProvider>
-    </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowPreviewModal(false)}>
+                Back to Edit
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowPreviewModal(false)
+                  form.handleSubmit(handleSubmit)()
+                }}
+                disabled={isSubmitting}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {isSubmitting ? 'Uploading...' : 'Confirm Upload'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
     </ProtectedRoute>
   )
 }

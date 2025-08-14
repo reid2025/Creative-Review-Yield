@@ -67,7 +67,7 @@ export class ErrorBoundary extends Component<Props, State> {
 }
 
 // Higher-order component for easier usage
-export function withErrorBoundary<T extends {}>(
+export function withErrorBoundary<T extends Record<string, unknown>>(
   Component: React.ComponentType<T>,
   errorFallback?: ReactNode
 ) {

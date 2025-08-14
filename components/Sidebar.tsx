@@ -117,7 +117,7 @@ const EdgeTrigger: React.FC<EdgeTriggerProps> = ({ isCollapsed, onToggle }) => {
       {/* Vertical line indicator when hovering */}
       {isHovering && !isCollapsed && (
         <div
-          className="fixed top-0 h-full w-px bg-gradient-to-b from-transparent via-white/10 to-transparent pointer-events-none z-40"
+          className="top-0 z-40 fixed bg-gradient-to-b from-transparent via-white/10 to-transparent w-px h-full pointer-events-none"
           style={{ left: '265px' }}
         />
       )}
@@ -208,7 +208,7 @@ const SidebarLogo: React.FC = () => {
   const { isCollapsed } = useSidebar()
 
   return (
-    <div className="px-4 pt-6 pb-8 flex justify-center relative overflow-hidden">
+    <div className="relative flex justify-center px-4 pt-6 pb-8 overflow-hidden">
       <Link 
         href="/" 
         className="group cursor-pointer"
@@ -224,7 +224,7 @@ const SidebarLogo: React.FC = () => {
             alt="CRY"
             width={60}
             height={60}
-            className="w-15 h-15 group-hover:brightness-110 transition-all duration-300"
+            className="group-hover:brightness-110 w-15 h-15 transition-all duration-300"
           />
         </div>
         
@@ -238,7 +238,7 @@ const SidebarLogo: React.FC = () => {
             alt="Creative Review Yield"
             width={263}
             height={60}
-            className="w-full h-auto group-hover:brightness-110 transition-all duration-300"
+            className="group-hover:brightness-110 w-full h-auto transition-all duration-300"
           />
           <p className={cn(
             "text-[0.8rem] italic text-[#ffffffb3] mt-2 transition-all ease-in-out group-hover:text-white/80",
@@ -312,10 +312,10 @@ const SidebarNavItem: React.FC<SidebarNavItemProps> = ({ href, icon, label, isAc
 
       {/* Tooltip for collapsed state */}
       {isCollapsed && showTooltip && (
-        <div className="absolute left-full ml-4 top-1/2 -translate-y-1/2 z-50">
-          <div className="bg-gray-900 text-white text-sm px-3 py-2 rounded-lg shadow-xl whitespace-nowrap">
+        <div className="top-1/2 left-full z-50 absolute ml-4 -translate-y-1/2">
+          <div className="bg-gray-900 shadow-xl px-3 py-2 rounded-lg text-white text-sm whitespace-nowrap">
             {label}
-            <div className="absolute right-full top-1/2 -translate-y-1/2 border-8 border-transparent border-r-gray-900" />
+            <div className="top-1/2 right-full absolute border-8 border-transparent border-r-gray-900 -translate-y-1/2" />
           </div>
         </div>
       )}
@@ -330,7 +330,7 @@ const SidebarNav: React.FC = () => {
   const pathname = usePathname()
 
   return (
-    <nav className="px-4 pt-6 overflow-y-auto overflow-x-hidden">
+    <nav className="px-4 pt-6 overflow-x-hidden overflow-y-auto">
       <ul className="space-y-2">
         {sidebarNavItems.map((item) => (
           <SidebarNavItem
@@ -371,7 +371,7 @@ const SidebarTools: React.FC = () => {
 
   return (
     <div className="px-4 py-4">
-      <div className="border-t border-[#333333] mb-4"></div>
+      <div className="mb-4 border-[#333333] border-t"></div>
       <ul className="space-y-1">
         {toolItems.map((item) => (
           <li key={item.href}>
@@ -442,54 +442,54 @@ const SidebarProfile: React.FC = () => {
   return (
     <div className="relative">
       {/* Subtle gradient separation */}
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+      <div className="top-0 absolute inset-x-0 bg-gradient-to-r from-transparent via-white/20 to-transparent h-px" />
       
       <div className="p-4 pt-6">
-        <div className="flex items-center justify-between">
+        <div className="flex justify-between items-center">
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-3 text-left w-full focus:outline-none group">
+            <DropdownMenuTrigger className="group flex items-center gap-3 focus:outline-none w-full text-left">
               <div className="relative">
-                <div className="w-10 h-10 rounded-full bg-[#89DA1A] flex items-center justify-center text-white font-semibold text-sm group-hover:bg-[#7cc516] transition-all duration-300">
+                <div className="flex justify-center items-center bg-[#89DA1A] group-hover:bg-[#7cc516] rounded-full w-10 h-10 font-semibold text-white text-sm transition-all duration-300">
                   {getUserInitials()}
                 </div>
-                {user && <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#89DA1A] rounded-full border-2 border-black" />}
+                {user && <div className="right-0 bottom-0 absolute bg-[#89DA1A] border-2 border-black rounded-full w-3 h-3" />}
               </div>
               {!isCollapsed && (
                 <>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{displayName}</p>
-                    <p className="text-xs text-white/60 truncate">{displayEmail}</p>
+                    <p className="font-medium text-white text-sm truncate">{displayName}</p>
+                    <p className="text-white/60 text-xs truncate">{displayEmail}</p>
                   </div>
-                  <ChevronDown className="w-4 h-4 text-white/40 flex-shrink-0 group-hover:text-white/60 transition-colors" />
+                  <ChevronDown className="flex-shrink-0 w-4 h-4 text-white/40 group-hover:text-white/60 transition-colors" />
                 </>
               )}
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align={isCollapsed ? "center" : "start"}>
-              <div className="px-2 py-3 border-b border-gray-100">
-                <div className="text-sm font-medium text-black">{displayName}</div>
-                <div className="text-xs text-gray-500">{displayEmail}</div>
+              <div className="px-2 py-3 border-gray-100 border-b">
+                <div className="font-medium text-black text-sm">{displayName}</div>
+                <div className="text-gray-500 text-xs">{displayEmail}</div>
               </div>
               <div className="py-1">
                 {user ? (
                   <>
                     <DropdownMenuItem asChild className="cursor-pointer">
                       <Link href="/drafts" className="flex items-center">
-                        <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                         <span>My Drafts</span>
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem className="cursor-pointer">
-                      <Settings className="mr-2 h-4 w-4" />
+                      <Settings className="mr-2 w-4 h-4" />
                       <span>Settings</span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem 
-                      className="cursor-pointer text-red-600"
+                      className="text-red-600 cursor-pointer"
                       onClick={handleLogout}
                     >
-                      <LogOut className="mr-2 h-4 w-4" />
+                      <LogOut className="mr-2 w-4 h-4" />
                       <span>Log out</span>
                     </DropdownMenuItem>
                   </>
@@ -497,13 +497,13 @@ const SidebarProfile: React.FC = () => {
                   <>
                     <DropdownMenuItem asChild className="cursor-pointer">
                       <Link href="/login" className="flex items-center">
-                        <LogOut className="mr-2 h-4 w-4" />
+                        <LogOut className="mr-2 w-4 h-4" />
                         <span>Sign In</span>
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild className="cursor-pointer">
                       <Link href="/register" className="flex items-center">
-                        <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                         </svg>
                         <span>Sign Up</span>
@@ -518,15 +518,18 @@ const SidebarProfile: React.FC = () => {
           {!isCollapsed && (
             <button 
               onClick={() => setIsQuickAddOpen(true)}
-              className="ml-2 p-2 rounded-lg bg-[#89DA1A] hover:bg-[#7cc516] text-black transition-colors"
+              className="bg-[#89DA1A] hover:bg-[#7cc516] shadow-sm hover:shadow-md ml-2 px-3 rounded-full focus:outline-none focus:ring-[#89DA1A]/60 focus:ring-2 h-10 font-medium text-black active:scale-[0.98] transition-all duration-200"
             >
-              <Image
-                src="/assets/icons/002-plus.png"
-                alt="Action"
-                width={16}
-                height={16}
-                style={{ filter: "brightness(0)" }}
-              />
+              <span className="flex items-center gap-2">
+                <Image
+                  src="/assets/icons/002-plus.png"
+                  alt="Action"
+                  width={16}
+                  height={16}
+                  style={{ filter: "brightness(0)" }}
+                />
+                Quick Add
+              </span>
             </button>
           )}
         </div>
@@ -540,70 +543,6 @@ const SidebarProfile: React.FC = () => {
   )
 }
 
-/**
- * SidebarFooter - Footer section with collapse toggle
- */
-const _SidebarFooter: React.FC = () => {
-  const { isCollapsed, toggleSidebar } = useSidebar()
-
-  return (
-    <div className="mt-auto overflow-hidden border-t-0">
-      {/* Lightbulb tooltip section */}
-      <div className={cn(
-        "flex cursor-pointer overflow-hidden",
-        isCollapsed ? "px-4 pb-6" : "px-4 py-6"
-      )}>
-        <div className={cn(
-          "bg-[#242527] hover:bg-[#414143] rounded-lg flex items-center group overflow-hidden",
-          isCollapsed ? "w-full h-12 justify-center" : "p-3 gap-3 w-full"
-        )}>
-          <Image
-            src="/assets/icons/011-lamp.png"
-            alt="Lightbulb"
-            width={24}
-            height={24}
-            className="flex-shrink-0"
-          />
-          <span className={cn(
-            "text-[15px] font-medium text-[#ffffffb3] transition-all ease-in-out",
-            isCollapsed ? "opacity-0 duration-75 w-0" : "opacity-100 duration-300 delay-300"
-          )}>
-            New idea in mind?
-          </span>
-        </div>
-      </div>
-
-      {/* Separator Line */}
-      <div className="border-t border-[#333333]"></div>
-
-      {/* Collapse Sidebar */}
-      <button 
-        onClick={toggleSidebar}
-        className={cn(
-          "flex items-center h-[60px] text-[15px] font-semibold text-[#ffffffb3] hover:text-[#89DA1A] w-full",
-          isCollapsed ? "justify-center" : "gap-3 px-[30px]"
-        )}
-      >
-        <Image
-          src="/assets/icons/007-side-bar.png"
-          alt={isCollapsed ? "Expand" : "Collapse"}
-          width={22}
-          height={22}
-          className="flex-shrink-0 opacity-70 hover:opacity-100"
-          style={{
-            filter: "brightness(0) invert(1)"
-          }}
-        />
-        <span className={cn(
-          "transition-all ease-in-out",
-          isCollapsed ? "opacity-0 duration-75 w-0" : "opacity-100 duration-300 delay-300"
-        )}>
-          {isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-        </span>
-      </button>
-    </div>
-  )
-}
 
 // ===========================
 // Main Exported Component
@@ -662,12 +601,11 @@ export const Sidebar: React.FC = () => {
       data-stagewise-version="2.0"
       role="navigation"
       aria-label="Main navigation"
-      aria-expanded={!isCollapsed}
     >
       {/* Skip to main content link for accessibility */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4"
+        className="sr-only focus:not-sr-only focus:top-4 focus:left-4 focus:absolute"
       >
         Skip to main content
       </a>
