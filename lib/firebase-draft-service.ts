@@ -22,6 +22,7 @@ export interface FirebaseDraftData {
   creativeFilename: string
   lastSaved: Timestamp
   createdAt: Timestamp
+  status?: 'draft' | 'saved' // Add status field
   autoSaved?: boolean
   formData: Record<string, unknown>
   imageUrl?: string
@@ -111,6 +112,7 @@ export class FirebaseDraftService {
         draftId: data.draftId || this.generateDraftId(),
         creativeFilename: data.creativeFilename || 'Untitled',
         lastSaved: serverTimestamp() as Timestamp,
+        status: data.status || 'draft', // Default to draft if not specified
         autoSaved: data.autoSaved || false,
         formData: cleanFormData || {},
         aiPopulatedFields: data.aiPopulatedFields || [],

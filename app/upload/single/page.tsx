@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import NextImage from 'next/image'
 import { useDropzone } from 'react-dropzone'
-import { Upload, Sparkles, ChevronDown, Search, Plus, Check, X } from 'lucide-react'
+import { Upload, Sparkles, ChevronDown, Search, Plus, Check, X, ArrowLeft, Save } from 'lucide-react'
 import { format, addDays } from 'date-fns'
 import { useAIFields } from '@/hooks/useAIFields'
 import { useFirebaseDrafts } from '@/hooks/useFirebaseDrafts'
@@ -411,10 +411,12 @@ export default function SingleUploadPage() {
   const [aiLoading, setAiLoading] = useState(false)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false)
+  const [showClearFormConfirm, setShowClearFormConfirm] = useState(false)
   const [pendingAIMode, setPendingAIMode] = useState<'empty' | 'all' | null>(null)
   const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null)
   const [currentFirebaseDocId, setCurrentFirebaseDocId] = useState<string | null>(null)
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null)
+  const [currentStatus, setCurrentStatus] = useState<'draft' | 'saved'>('draft')
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const [hasChanges, setHasChanges] = useState(false)
   const [countdown, setCountdown] = useState(30)
@@ -607,9 +609,19 @@ export default function SingleUploadPage() {
       // Always set designer to current user
       setField('designer', currentUser, true, designerOptions)
       
-      // Don't touch start and end dates - user will fill these
-      // setField('startDate', ...) - SKIP
-      // setField('endDate', ...) - SKIP
+      // Fill dates with defaults for form validation
+      if (!currentValues.startDate) {
+        const today = format(new Date(), 'yyyy-MM-dd')
+        form.setValue('startDate', today)
+        markFieldAsAI('startDate')
+        fieldsToUpdate.push('startDate')
+      }
+      if (!currentValues.endDate) {
+        const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd')
+        form.setValue('endDate', tomorrow)
+        markFieldAsAI('endDate')
+        fieldsToUpdate.push('endDate')
+      }
       
       setField('litigationName', validatedAnalysis.litigationName, true, litigationOptions)
       setField('campaignType', validatedAnalysis.campaignType, true, campaignTypeOptions)
@@ -869,6 +881,7 @@ export default function SingleUploadPage() {
         id: currentFirebaseDocId || undefined,
         draftId: currentDraftId || undefined,
         creativeFilename: form.getValues('creativeFilename'),
+        status: 'draft', // Always save as draft during auto-save
         autoSaved: true,
         formData: form.getValues(),
         aiPopulatedFields: Array.from(aiFieldsSet)
@@ -881,6 +894,7 @@ export default function SingleUploadPage() {
         if (!currentDraftId) {
           setCurrentDraftId(draftData.draftId || `draft_${Date.now()}`)
         }
+        setCurrentStatus('draft') // Set status to draft for auto-save
         setLastSaved(new Date())
         setHasChanges(false)
       }
@@ -889,26 +903,44 @@ export default function SingleUploadPage() {
     }
   }
 
-  // Form submission
+  // Form submission - Save as final (not draft)
   const handleSubmit = async (data: FormData) => {
     setIsSubmitting(true)
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      if (currentFirebaseDocId) {
-        await deleteFirebaseDraft(currentFirebaseDocId)
+      // Save creative with 'saved' status
+      const finalData: Partial<FirebaseDraftData> = {
+        id: currentFirebaseDocId || undefined,
+        draftId: currentDraftId || `creative_${Date.now()}`,
+        creativeFilename: data.creativeFilename || `creative-${Date.now()}`,
+        status: 'saved', // Mark as saved, not draft
+        autoSaved: false,
+        formData: form.getValues(),
+        aiPopulatedFields: Array.from(aiFieldsSet)
       }
-
-      toast.success('Creative uploaded successfully')
+      
+      // Save with 'saved' status
+      const docId = await saveFirebaseDraft(finalData, uploadedImageFile || undefined)
+      
+      if (docId) {
+        setCurrentStatus('saved') // Update status to saved
+        toast.success('Creative saved successfully! Status: Saved')
+      } else {
+        throw new Error('Failed to save creative')
+      }
+      
+      // Reset form and start fresh
       form.reset()
       setShowImage(false)
       setImagePreviewUrl(null)
       setUploadedImageFile(null)
       setCurrentDraftId(null)
       setCurrentFirebaseDocId(null)
+      setCurrentStatus('draft') // Reset status for new form
       clearAllAITags()
-    } catch {
-      toast.error('Failed to upload creative')
+      setAiSuggestions({})
+    } catch (error) {
+      console.error('Save error:', error)
+      toast.error('Failed to save creative')
     } finally {
       setIsSubmitting(false)
     }
@@ -1002,13 +1034,58 @@ export default function SingleUploadPage() {
           {showImage && imagePreviewUrl && (
             <div className="w-80 min-h-screen">
               <div className="top-0 sticky bg-white shadow-lg p-6 border border-gray-200 rounded-2xl">
-                <div className="relative bg-gray-100 mb-4 rounded-lg aspect-video overflow-hidden">
-                  <NextImage
-                    src={imagePreviewUrl}
-                    alt="Creative preview"
-                    className="w-full h-full object-contain"
-                    width={320}
-                    height={180}
+                {/* Square image container with magnifying glass zoom */}
+                <div className="relative mb-4" style={{ overflow: 'visible' }}>
+                  <div 
+                    className="relative bg-gray-100 rounded-lg aspect-square overflow-hidden cursor-crosshair"
+                    onMouseMove={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      const parentRect = e.currentTarget.parentElement?.getBoundingClientRect()
+                      if (!parentRect) return
+                      
+                      const x = ((e.clientX - rect.left) / rect.width) * 100
+                      const y = ((e.clientY - rect.top) / rect.height) * 100
+                      const magnifier = e.currentTarget.parentElement?.querySelector('.magnifier') as HTMLElement
+                      if (magnifier) {
+                        magnifier.style.backgroundPosition = `${x}% ${y}%`
+                        
+                        // Position magnifier at cursor, allow it to go outside image bounds
+                        let left = e.clientX - parentRect.left - 75 // Center on cursor
+                        let top = e.clientY - parentRect.top - 75 // Center on cursor
+                        
+                        // Allow magnifier to go outside but keep it visible in viewport
+                        left = Math.max(-75, Math.min(left, parentRect.width - 75))
+                        top = Math.max(-75, Math.min(top, parentRect.height - 75))
+                        
+                        magnifier.style.left = `${left}px`
+                        magnifier.style.top = `${top}px`
+                        magnifier.style.display = 'block'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      const magnifier = e.currentTarget.parentElement?.querySelector('.magnifier') as HTMLElement
+                      if (magnifier) {
+                        magnifier.style.display = 'none'
+                      }
+                    }}
+                  >
+                    <NextImage
+                      src={imagePreviewUrl}
+                      alt="Creative preview"
+                      className="w-full h-full object-contain"
+                      width={320}
+                      height={320}
+                    />
+                  </div>
+                  {/* Magnifying glass - can extend outside image bounds */}
+                  <div 
+                    className="magnifier absolute w-[150px] h-[150px] border-2 border-gray-400 rounded-full pointer-events-none hidden shadow-lg bg-white"
+                    style={{
+                      backgroundImage: `url(${imagePreviewUrl})`,
+                      backgroundRepeat: 'no-repeat',
+                      backgroundSize: '300%',
+                      zIndex: 100
+                    }}
                   />
                 </div>
                 <Button
@@ -1030,6 +1107,99 @@ export default function SingleUploadPage() {
                     <span className={isOnline ? 'text-green-600' : 'text-red-600'}>
                       {isOnline ? '✓ Synced' : '⚠ Offline'}
                     </span>
+                  </div>
+                </div>
+                
+                {/* Tag Summary Section */}
+                <div className="mt-4 pt-4 border-t">
+                  <h3 className="font-semibold text-sm mb-2 text-gray-700">Selected Tags</h3>
+                  <div className="space-y-2 text-xs">
+                    {form.watch('designer') && (
+                      <div>
+                        <span className="text-gray-600">Designer:</span>
+                        <Badge variant="outline" className="ml-1 text-xs py-0 px-1 bg-purple-50 text-purple-700 border-purple-300">
+                          {form.watch('designer')}
+                        </Badge>
+                      </div>
+                    )}
+                    {form.watch('litigationName') && (
+                      <div>
+                        <span className="text-gray-600">Litigation:</span>
+                        <Badge variant="outline" className="ml-1 text-xs py-0 px-1 bg-red-50 text-red-700 border-red-300">
+                          {form.watch('litigationName')}
+                        </Badge>
+                      </div>
+                    )}
+                    {form.watch('campaignType') && (
+                      <div>
+                        <span className="text-gray-600">Campaign:</span>
+                        <Badge variant="outline" className="ml-1 text-xs py-0 px-1 bg-blue-50 text-blue-700 border-blue-300">
+                          {form.watch('campaignType')}
+                        </Badge>
+                      </div>
+                    )}
+                    {form.watch('creativeLayoutType') && (
+                      <div>
+                        <span className="text-gray-600">Layout:</span>
+                        <Badge variant="outline" className="ml-1 text-xs py-0 px-1 bg-amber-50 text-amber-700 border-amber-300">
+                          {form.watch('creativeLayoutType')}
+                        </Badge>
+                      </div>
+                    )}
+                    {form.watch('imageryType')?.length > 0 && (
+                      <div>
+                        <span className="text-gray-600">Imagery:</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {form.watch('imageryType').map((type: string) => (
+                            <Badge key={type} variant="outline" className="text-xs py-0 px-1 bg-teal-50 text-teal-700 border-teal-300">
+                              {type}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {form.watch('headlineTags')?.length > 0 && (
+                      <div>
+                        <span className="text-gray-600">Headlines:</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {form.watch('headlineTags').map((tag: string) => (
+                            <Badge key={tag} variant="outline" className="text-xs py-0 px-1 bg-indigo-50 text-indigo-700 border-indigo-300">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {form.watch('copyTone')?.length > 0 && (
+                      <div>
+                        <span className="text-gray-600">Copy Tone:</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {form.watch('copyTone').map((tone: string) => (
+                            <Badge key={tone} variant="outline" className="text-xs py-0 px-1 bg-pink-50 text-pink-700 border-pink-300">
+                              {tone}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {form.watch('ctaVerb') && (
+                      <div>
+                        <span className="text-gray-600">CTA Verb:</span>
+                        <Badge variant="outline" className="ml-1 text-xs py-0 px-1 bg-emerald-50 text-emerald-700 border-emerald-300">
+                          {form.watch('ctaVerb')}
+                        </Badge>
+                      </div>
+                    )}
+                    {/* Show count of total filled fields */}
+                    <div className="pt-2 mt-2 border-t">
+                      <span className="text-gray-600">Fields filled:</span>
+                      <span className="ml-1 font-semibold text-gray-900">
+                        {Object.values(form.getValues()).filter(v => 
+                          v !== '' && v !== null && v !== undefined && 
+                          (!Array.isArray(v) || v.length > 0)
+                        ).length} / {Object.keys(form.getValues()).length}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1073,14 +1243,10 @@ export default function SingleUploadPage() {
                   
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      if (confirm('Clear all form data?')) {
-                        form.reset()
-                        clearAllAITags()
-                        setShowImage(false)
-                        setImagePreviewUrl(null)
-                        toast.success('Form cleared')
-                      }
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      setShowClearFormConfirm(true)
                     }}
                   >
                     Clear Form
@@ -1088,7 +1254,7 @@ export default function SingleUploadPage() {
                   
                   <Button
                     onClick={() => setShowPreviewModal(true)}
-                    disabled={isSubmitting || !isFormValid()}
+                    disabled={isSubmitting}
                     className="bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     {isSubmitting ? 'Uploading...' : 'Preview & Upload'}
@@ -1106,10 +1272,10 @@ export default function SingleUploadPage() {
                   <CardContent className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <FormFieldWrapper label="Creative Filename" required isAIFilled={aiFieldsSet.has('creativeFilename')}>
-                        <Input {...form.register('creativeFilename')} placeholder="Auto-populated from image" />
+                        <Input {...form.register('creativeFilename')} placeholder="Auto-populated from image" readOnly className="bg-gray-50 cursor-not-allowed" />
                       </FormFieldWrapper>
                       <FormFieldWrapper label="Date Added" isAIFilled={aiFieldsSet.has('dateAdded')}>
-                        <Input {...form.register('dateAdded')} type="date" readOnly />
+                        <Input {...form.register('dateAdded')} type="date" readOnly className="bg-gray-50 cursor-not-allowed" />
                       </FormFieldWrapper>
                     </div>
                     
@@ -1515,66 +1681,465 @@ export default function SingleUploadPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-        {/* Preview Modal */}
-        <Dialog open={showPreviewModal} onOpenChange={setShowPreviewModal}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        
+        {/* Clear Form Confirmation Dialog */}
+        <Dialog open={showClearFormConfirm} onOpenChange={setShowClearFormConfirm}>
+          <DialogContent>
             <DialogHeader>
-              <DialogTitle>Preview Creative Upload</DialogTitle>
-              <DialogDescription>Review all information before uploading</DialogDescription>
+              <DialogTitle>Clear Form Data</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to clear all form data? The image will remain, but all fields will be reset.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowClearFormConfirm(false)}>
+                No, Keep Data
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  // Keep the current filename if it exists
+                  const currentFilename = form.getValues('creativeFilename')
+                  
+                  // Reset form to initial default values but keep image-related data
+                  form.reset({
+                    skipImage: false,
+                    uploadedImage: uploadedImageFile, // Keep the uploaded image
+                    creativeFilename: currentFilename || '', // Keep the filename
+                    dateAdded: format(new Date(), 'yyyy-MM-dd'),
+                    designer: '',
+                    startDate: '',
+                    endDate: '',
+                    litigationName: '',
+                    campaignType: '',
+                    amountSpent: '',
+                    costPerWebsiteLead: '',
+                    costPerClick: '',
+                    creativeLayoutType: '',
+                    messagingStructure: '',
+                    imageryType: [],
+                    imageryBackground: [],
+                    questionBasedHeadline: false,
+                    clientBranding: false,
+                    iconsUsed: false,
+                    markedAsTopAd: false,
+                    needsOptimization: false,
+                    preheadlineText: '',
+                    headlineText: '',
+                    headlineTags: [],
+                    headlineIntent: [],
+                    ctaLabel: '',
+                    ctaVerb: '',
+                    ctaStyleGroup: '',
+                    ctaColor: '',
+                    ctaPosition: '',
+                    bodyCopySummary: '',
+                    copyAngle: [],
+                    copyTone: [],
+                    audiencePersona: '',
+                    campaignTrigger: '',
+                    legalLanguage: false,
+                    emotionalStatement: false,
+                    dollarAmount: false,
+                    statMentioned: false,
+                    disclaimer: false,
+                    conditionsListed: false,
+                    designerRemarks: '',
+                    internalNotes: '',
+                    uploadGoogleDocLink: '',
+                    pinNoteForStrategySync: false,
+                  })
+                  clearAllAITags()
+                  setAiSuggestions({})
+                  // Don't change showImage or imagePreviewUrl - keep the image visible
+                  toast.success('Form data cleared')
+                  setShowClearFormConfirm(false)
+                }}
+              >
+                Yes, Clear Form
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Enhanced Preview Modal */}
+        <Dialog open={showPreviewModal} onOpenChange={setShowPreviewModal}>
+          <DialogContent className="max-w-7xl max-h-[95vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold">Preview Creative Upload</DialogTitle>
+              <DialogDescription asChild>
+                <div>
+                  Review all information before saving. 
+                  <span className="ml-2">Current status: 
+                    {currentStatus === 'draft' ? (
+                      <Badge variant="outline" className="ml-1 bg-yellow-50 text-yellow-700 border-yellow-300">Draft</Badge>
+                    ) : (
+                      <Badge variant="outline" className="ml-1 bg-green-50 text-green-700 border-green-300">Saved</Badge>
+                    )}
+                  </span>
+                </div>
+              </DialogDescription>
             </DialogHeader>
             
-            <div className="space-y-4 mt-4">
-              {imagePreviewUrl && (
-                <div className="p-4 border rounded-lg">
-                  <h3 className="mb-2 font-semibold">Image Preview</h3>
-                  <NextImage
-                    src={imagePreviewUrl}
-                    alt="Creative preview"
-                    className="mx-auto max-w-full h-auto max-h-64 object-contain"
-                    width={400}
-                    height={256}
-                  />
+            <div className="flex gap-6 mt-4" style={{ height: 'calc(75vh - 100px)' }}>
+              {/* Left Column - Image with Magnifying Glass */}
+              <div className="w-[45%]">
+                {imagePreviewUrl && (
+                  <div className="h-full space-y-4 flex flex-col border rounded-lg bg-gray-50 p-6">
+                    <h3 className="font-semibold text-base text-gray-700">Creative Image</h3>
+                    <div className=" bg-white rounded-lg p-4 relative overflow-visible">
+                      {/* Magnifying glass container - 2x bigger */}
+                      <div 
+                        className="magnifier absolute w-[300px] h-[300px] border-2 border-gray-400 rounded-full pointer-events-none hidden z-50 shadow-lg"
+                        style={{
+                          backgroundImage: `url(${imagePreviewUrl})`,
+                          backgroundRepeat: 'no-repeat',
+                          backgroundSize: '350%',
+                        }}
+                      />
+                      
+                      {/* Image with hover detection */}
+                      <div
+                        className="relative rounded-lg cursor-crosshair"
+                        onMouseMove={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect()
+                          const parentRect = e.currentTarget.parentElement?.getBoundingClientRect()
+                          if (!parentRect) return
+                          
+                          const x = ((e.clientX - rect.left) / rect.width) * 100
+                          const y = ((e.clientY - rect.top) / rect.height) * 100
+                          const magnifier = e.currentTarget.parentElement?.querySelector('.magnifier') as HTMLElement
+                          if (magnifier) {
+                            magnifier.style.backgroundPosition = `${x}% ${y}%`
+                            
+                            // Position magnifier at cursor, allow it to go outside image bounds
+                            let left = e.clientX - parentRect.left - 150 // Center on cursor (300px/2)
+                            let top = e.clientY - parentRect.top - 150 // Center on cursor (300px/2)
+                            
+                            // Allow magnifier to go outside but keep it visible in viewport
+                            left = Math.max(-150, Math.min(left, parentRect.width - 150))
+                            top = Math.max(-150, Math.min(top, parentRect.height - 150))
+                            
+                            magnifier.style.left = `${left}px`
+                            magnifier.style.top = `${top}px`
+                            magnifier.style.display = 'block'
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          const magnifier = e.currentTarget.parentElement?.querySelector('.magnifier') as HTMLElement
+                          if (magnifier) {
+                            magnifier.style.display = 'none'
+                          }
+                        }}
+                      >
+                        <NextImage
+                          src={imagePreviewUrl}
+                          alt="Creative preview"
+                          className="w-full h-full object-contain rounded"
+                          width={600}
+                          height={600}
+                        />
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-600 space-y-2">
+                      <div><span className="font-semibold">Filename:</span> {form.getValues('creativeFilename')}</div>
+                      <div><span className="font-semibold">Date Added:</span> {form.getValues('dateAdded')}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Right Column - ALL Form Data */}
+              <div className="flex-1 overflow-y-auto pr-3">
+                <div className="space-y-3">
+                {/* Metadata & Dates */}
+                <div className="p-3 border rounded-lg bg-gray-50">
+                  <h3 className="mb-2 font-semibold text-sm text-gray-800 border-b pb-1">Metadata & Dates</h3>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <div>
+                      <span className="text-gray-600">Start Date:</span>
+                      <span className="font-medium ml-2">{form.getValues('startDate')}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">End Date:</span>
+                      <span className="font-medium ml-2">{form.getValues('endDate')}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Designer:</span>
+                      <span className="font-medium ml-2">{form.getValues('designer')}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Date Added:</span>
+                      <span className="font-medium ml-2">{form.getValues('dateAdded')}</span>
+                    </div>
+                  </div>
                 </div>
-              )}
 
-              <div className="p-4 border rounded-lg">
-                <h3 className="mb-2 font-semibold">Campaign Details</h3>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <span className="font-medium text-gray-600">Filename:</span>
-                    <span className="ml-2">{form.getValues('creativeFilename')}</span>
+                {/* Campaign Info */}
+                <div className="p-3 border rounded-lg bg-gray-50">
+                  <h3 className="mb-2 font-semibold text-sm text-gray-800 border-b pb-1">Campaign Information</h3>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <div>
+                      <span className="text-gray-600">Litigation:</span>
+                      <span className="font-medium ml-2">{form.getValues('litigationName') || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Campaign:</span>
+                      <span className="font-medium ml-2">{form.getValues('campaignType') || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Layout:</span>
+                      <span className="font-medium ml-2">{form.getValues('creativeLayoutType') || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Messaging:</span>
+                      <span className="font-medium ml-2">{form.getValues('messagingStructure') || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Audience:</span>
+                      <span className="font-medium ml-2">{form.getValues('audiencePersona') || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Trigger:</span>
+                      <span className="font-medium ml-2">{form.getValues('campaignTrigger') || 'N/A'}</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="font-medium text-gray-600">Designer:</span>
-                    <span className="ml-2">{form.getValues('designer')}</span>
+                </div>
+
+                {/* Headlines & CTA */}
+                <div className="p-3 border rounded-lg bg-gray-50 col-span-2">
+                  <h3 className="mb-2 font-semibold text-sm text-gray-800 border-b pb-1">Headlines & CTA</h3>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <div><span className="text-gray-600">Pre-headline:</span> <span className="font-medium">{form.getValues('preheadlineText') || 'N/A'}</span></div>
+                    <div><span className="text-gray-600">Headline:</span> <span className="font-medium">{form.getValues('headlineText') || 'N/A'}</span></div>
+                    <div><span className="text-gray-600">CTA Label:</span> <span className="font-medium">{form.getValues('ctaLabel') || 'N/A'}</span></div>
+                    <div><span className="text-gray-600">CTA Verb:</span> <span className="font-medium">{form.getValues('ctaVerb') || 'N/A'}</span></div>
+                    <div><span className="text-gray-600">CTA Style:</span> <span className="font-medium">{form.getValues('ctaStyleGroup') || 'N/A'}</span></div>
+                    <div><span className="text-gray-600">CTA Color:</span> <span className="font-medium">{form.getValues('ctaColor') || 'N/A'}</span></div>
+                    <div><span className="text-gray-600">CTA Position:</span> <span className="font-medium">{form.getValues('ctaPosition') || 'N/A'}</span></div>
                   </div>
-                  <div>
-                    <span className="font-medium text-gray-600">Campaign Type:</span>
-                    <span className="ml-2">{form.getValues('campaignType')}</span>
+                </div>
+
+                {/* Visual Elements */}
+                <div className="p-3 border rounded-lg bg-gray-50">
+                  <h3 className="mb-2 font-semibold text-sm text-gray-800 border-b pb-1">Visual Elements</h3>
+                  <div className="space-y-2 text-sm">
+                    <div>
+                      <span className="text-gray-600">Imagery Type:</span>
+                      {form.getValues('imageryType')?.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {form.getValues('imageryType').map((type: string) => (
+                            <Badge key={type} variant="secondary" className="text-xs">{type}</Badge>
+                          ))}
+                        </div>
+                      ) : ' N/A'}
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Background:</span>
+                      {form.getValues('imageryBackground')?.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {form.getValues('imageryBackground').map((bg: string) => (
+                            <Badge key={bg} variant="secondary" className="text-xs">{bg}</Badge>
+                          ))}
+                        </div>
+                      ) : ' N/A'}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 mt-2">
+                      <div className="text-center">
+                        <div className="text-gray-600">Question-Based</div>
+                        <Badge variant={form.getValues('questionBasedHeadline') ? 'default' : 'outline'} className="text-sm">
+                          {form.getValues('questionBasedHeadline') ? 'Yes' : 'No'}
+                        </Badge>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-gray-600">Client Brand</div>
+                        <Badge variant={form.getValues('clientBranding') ? 'default' : 'outline'} className="text-sm">
+                          {form.getValues('clientBranding') ? 'Yes' : 'No'}
+                        </Badge>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-gray-600">Icons Used</div>
+                        <Badge variant={form.getValues('iconsUsed') ? 'default' : 'outline'} className="text-sm">
+                          {form.getValues('iconsUsed') ? 'Yes' : 'No'}
+                        </Badge>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="font-medium text-gray-600">Litigation:</span>
-                    <span className="ml-2">{form.getValues('litigationName')}</span>
+                </div>
+
+                {/* Copy Elements */}
+                <div className="p-3 border rounded-lg bg-gray-50">
+                  <h3 className="mb-2 font-semibold text-sm text-gray-800 border-b pb-1">Copy Elements</h3>
+                  <div className="space-y-1.5 text-sm">
+                    <div><span className="text-gray-600">Body Copy:</span> <span className="font-medium">{form.getValues('bodyCopySummary') || 'N/A'}</span></div>
+                    <div>
+                      <span className="text-gray-600">Copy Angle:</span>
+                      {form.getValues('copyAngle')?.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {form.getValues('copyAngle').map((angle: string) => (
+                            <Badge key={angle} variant="secondary" className="text-xs">{angle}</Badge>
+                          ))}
+                        </div>
+                      ) : ' N/A'}
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Copy Tone:</span>
+                      {form.getValues('copyTone')?.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {form.getValues('copyTone').map((tone: string) => (
+                            <Badge key={tone} variant="secondary" className="text-xs">{tone}</Badge>
+                          ))}
+                        </div>
+                      ) : ' N/A'}
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Headline Tags:</span>
+                      {form.getValues('headlineTags')?.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {form.getValues('headlineTags').map((tag: string) => (
+                            <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
+                          ))}
+                        </div>
+                      ) : ' N/A'}
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Headline Intent:</span>
+                      {form.getValues('headlineIntent')?.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {form.getValues('headlineIntent').map((intent: string) => (
+                            <Badge key={intent} variant="secondary" className="text-xs">{intent}</Badge>
+                          ))}
+                        </div>
+                      ) : ' N/A'}
+                    </div>
                   </div>
+                </div>
+
+                {/* Content Flags */}
+                <div className="p-3 border rounded-lg bg-gray-50 col-span-2">
+                  <h3 className="mb-2 font-semibold text-sm text-gray-800 border-b pb-1">Content Flags</h3>
+                  <div className="grid grid-cols-6 gap-2 text-sm">
+                    <div className="text-center">
+                      <div className="text-gray-600">Legal Lang</div>
+                      <Badge variant={form.getValues('legalLanguage') ? 'default' : 'outline'} className="text-sm">
+                        {form.getValues('legalLanguage') ? 'Yes' : 'No'}
+                      </Badge>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-gray-600">Emotional</div>
+                      <Badge variant={form.getValues('emotionalStatement') ? 'default' : 'outline'} className="text-sm">
+                        {form.getValues('emotionalStatement') ? 'Yes' : 'No'}
+                      </Badge>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-gray-600">Dollar Amt</div>
+                      <Badge variant={form.getValues('dollarAmount') ? 'default' : 'outline'} className="text-sm">
+                        {form.getValues('dollarAmount') ? 'Yes' : 'No'}
+                      </Badge>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-gray-600">Stats</div>
+                      <Badge variant={form.getValues('statMentioned') ? 'default' : 'outline'} className="text-sm">
+                        {form.getValues('statMentioned') ? 'Yes' : 'No'}
+                      </Badge>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-gray-600">Disclaimer</div>
+                      <Badge variant={form.getValues('disclaimer') ? 'default' : 'outline'} className="text-sm">
+                        {form.getValues('disclaimer') ? 'Yes' : 'No'}
+                      </Badge>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-gray-600">Conditions</div>
+                      <Badge variant={form.getValues('conditionsListed') ? 'default' : 'outline'} className="text-sm">
+                        {form.getValues('conditionsListed') ? 'Yes' : 'No'}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Performance Metrics */}
+                <div className="p-3 border rounded-lg bg-gray-50 col-span-2">
+                  <h3 className="mb-2 font-semibold text-sm text-gray-800 border-b pb-1">Performance Metrics</h3>
+                  <div className="grid grid-cols-3 gap-3 text-sm">
+                    <div className="text-center p-2 bg-gray-50 rounded">
+                      <div className="text-xs text-gray-600">Spent</div>
+                      <div className="font-bold">${form.getValues('amountSpent') || '0'}</div>
+                    </div>
+                    <div className="text-center p-2 bg-gray-50 rounded">
+                      <div className="text-xs text-gray-600">CPL</div>
+                      <div className="font-bold">${form.getValues('costPerWebsiteLead') || '0'}</div>
+                    </div>
+                    <div className="text-center p-2 bg-gray-50 rounded">
+                      <div className="text-xs text-gray-600">CPC</div>
+                      <div className="font-bold">${form.getValues('costPerClick') || '0'}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status Indicator */}
+                <div className={`p-3 border-2 rounded-lg col-span-2 ${!isFormValid() ? 'bg-yellow-50 border-yellow-300' : currentStatus === 'draft' ? 'bg-blue-50 border-blue-300' : 'bg-green-50 border-green-300'}`}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-semibold text-base text-gray-700">Save Status</h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {!isFormValid() 
+                          ? 'Please complete all required fields before saving as final'
+                          : currentStatus === 'draft' 
+                          ? 'This will save the creative as final and remove it from drafts'
+                          : 'Creative has been saved successfully'}
+                      </p>
+                    </div>
+                    {!isFormValid() ? (
+                      <Badge variant="outline" className="bg-yellow-100 text-yellow-700 border-yellow-300">Form Incomplete</Badge>
+                    ) : currentStatus === 'draft' ? (
+                      <Badge variant="default" className="bg-green-600">Ready to Save</Badge>
+                    ) : (
+                      <Badge variant="default" className="bg-green-700">Saved</Badge>
+                    )}
+                  </div>
+                </div>
                 </div>
               </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="flex justify-between mt-6">
               <Button variant="outline" onClick={() => setShowPreviewModal(false)}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to Edit
               </Button>
-              <Button
-                onClick={() => {
-                  setShowPreviewModal(false)
-                  form.handleSubmit(handleSubmit)()
-                }}
-                disabled={isSubmitting}
-                className="bg-green-600 hover:bg-green-700 text-white"
-              >
-                {isSubmitting ? 'Uploading...' : 'Confirm Upload'}
-              </Button>
+              <div className="flex gap-2">
+                {currentStatus === 'draft' && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowPreviewModal(false)
+                      toast.info('Creative remains as draft')
+                    }}
+                  >
+                    Keep as Draft
+                  </Button>
+                )}
+                <Button
+                  onClick={() => {
+                    if (currentStatus === 'saved') {
+                      setShowPreviewModal(false)
+                      toast.info('Creative already saved')
+                    } else if (!isFormValid()) {
+                      toast.error('Please complete all required fields before saving')
+                    } else {
+                      setShowPreviewModal(false)
+                      form.handleSubmit(handleSubmit)()
+                    }
+                  }}
+                  disabled={isSubmitting || currentStatus === 'saved' || !isFormValid()}
+                  className={currentStatus === 'saved' ? 'bg-gray-600' : !isFormValid() ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700 text-white'}
+                  title={!isFormValid() ? 'Complete all required fields to save' : ''}
+                >
+                  <Save className="mr-2 h-4 w-4" />
+                  {isSubmitting ? 'Saving...' : currentStatus === 'saved' ? 'Already Saved' : !isFormValid() ? 'Form Incomplete' : 'Save as Final'}
+                </Button>
+              </div>
             </DialogFooter>
           </DialogContent>
         </Dialog>
