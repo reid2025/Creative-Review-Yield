@@ -4,8 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import NextImage from 'next/image'
 import { 
-  collection, 
-  doc,
+  collection,
   getDocs,
   query,
   where,
@@ -15,7 +14,6 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
-import { format } from 'date-fns'
 import { toast } from 'sonner'
 
 // UI Components
@@ -24,7 +22,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -45,24 +42,17 @@ import {
   TrendingUp,
   Target,
   Lightbulb,
-  BarChart3,
-  FileText,
   Download,
   Save,
   ArrowLeft,
-  Plus,
-  X,
   AlertCircle,
   CheckCircle2,
   Loader2,
-  Eye,
   Sparkles,
-  ChevronRight,
   Users,
   DollarSign,
   MousePointerClick,
-  ImageIcon,
-  Hash
+  ImageIcon
 } from 'lucide-react'
 
 interface Creative {
@@ -193,6 +183,7 @@ export default function StrategySyncPage() {
     }
     
     fetchCreatives()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [creativeIds]) // Remove analysisStarted from dependencies to prevent loops
   
   // Calculate statistics
@@ -407,9 +398,6 @@ export default function StrategySyncPage() {
     const sortedByCPC = [...withMetrics].sort((a, b) => 
       parseFloat(a.costPerClick!) - parseFloat(b.costPerClick!)
     )
-    const sortedByCPL = [...withMetrics].sort((a, b) => 
-      parseFloat(a.costPerWebsiteLead!) - parseFloat(b.costPerWebsiteLead!)
-    )
     
     if (sortedByCPC.length > 0) {
       const bestCPC = sortedByCPC[0]
@@ -499,7 +487,7 @@ export default function StrategySyncPage() {
     const topPerformers = creatives
       .filter(c => c.markedAsTopAd || (c.costPerClick && parseFloat(c.costPerClick) < average(creatives.map(cr => parseFloat(cr.costPerClick || '100')))))
     
-    const underutilized: Record<string, any> = {}
+    const underutilized: Record<string, string[]> = {}
     
     // Check CTAs
     const successfulCTAs = topPerformers.map(c => c.ctaLabel).filter(Boolean)
@@ -577,7 +565,7 @@ export default function StrategySyncPage() {
     const metrics = creatives.filter(c => c.costPerClick && c.costPerWebsiteLead)
     if (metrics.length >= 3) {
       const cpcValues = metrics.map(c => parseFloat(c.costPerClick!))
-      const avgCPC = average(cpcValues)
+      // const avgCPC = average(cpcValues) // Not used in this section
       const minCPC = Math.min(...cpcValues)
       const maxCPC = Math.max(...cpcValues)
       
@@ -625,7 +613,7 @@ export default function StrategySyncPage() {
     return arr.reduce((sum, val) => sum + val, 0) / arr.length
   }
   
-  const groupBy = <T>(arr: T[], key: keyof T): Record<string, T[]> => {
+  const groupBy = <T,>(arr: T[], key: keyof T): Record<string, T[]> => {
     return arr.reduce((groups, item) => {
       const val = item[key] as string
       if (val) {

@@ -6,7 +6,6 @@ import NextImage from 'next/image'
 import { 
   collection, 
   query, 
-  where, 
   orderBy, 
   onSnapshot, 
   deleteDoc,
@@ -15,17 +14,16 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
-import { format } from 'date-fns'
 import { toast } from 'sonner'
 
 // UI Components
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
 import {
   Select,
   SelectContent,
@@ -58,19 +56,11 @@ import {
   MoreVertical, 
   Eye, 
   Edit, 
-  Trash2, 
-  Pin,
+  Trash2,
   ArrowUpDown,
   Grid3X3,
   TableIcon,
-  Download,
-  ChevronDown,
-  X,
-  CheckCircle2,
-  ImageIcon,
-  TrendingUp,
-  TrendingDown,
-  Loader2
+  ImageIcon
 } from 'lucide-react'
 
 interface Creative {

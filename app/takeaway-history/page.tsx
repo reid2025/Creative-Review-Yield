@@ -6,7 +6,6 @@ import {
   collection, 
   query,
   where,
-  orderBy,
   onSnapshot,
   deleteDoc,
   doc,
@@ -55,13 +54,11 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion'
-import { Separator } from '@/components/ui/separator'
 
 // Icons
 import { 
   History,
   Search,
-  Filter,
   Download,
   Trash2,
   Eye,
@@ -71,8 +68,6 @@ import {
   Brain,
   FileText,
   ChevronRight,
-  X,
-  Loader2,
   MousePointerClick,
   Users,
   DollarSign,

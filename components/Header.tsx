@@ -38,16 +38,17 @@ export function Header({ pageTitle, innerMenu, hideBreadcrumbs }: HeaderProps) {
 function HeaderBreadcrumbs({ pageTitle }: { pageTitle?: string }) {
   const pathname = usePathname()
   
-  const getDefaultPageTitle = () => {
-    const segments = pathname.split('/').filter(Boolean)
-    if (segments.length === 0) return 'Dashboard'
-    
-    const lastSegment = segments[segments.length - 1]
-    return lastSegment
-      .split('-')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ')
-  }
+  // Keeping this function for potential future use
+  // const getDefaultPageTitle = () => {
+  //   const segments = pathname.split('/').filter(Boolean)
+  //   if (segments.length === 0) return 'Dashboard'
+  //   
+  //   const lastSegment = segments[segments.length - 1]
+  //   return lastSegment
+  //     .split('-')
+  //     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+  //     .join(' ')
+  // }
   
   const segments = pathname.split('/').filter(Boolean)
   

@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import NextImage from 'next/image'
 import { useDropzone } from 'react-dropzone'
-import { Upload, Sparkles, ChevronDown, Search, Plus, Check, X, ArrowLeft, Save } from 'lucide-react'
+import { Upload, Sparkles, ChevronDown, Search, Plus, Check, X } from 'lucide-react'
 import { format, addDays } from 'date-fns'
 import { useAIFields } from '@/hooks/useAIFields'
 import { useFirebaseDrafts } from '@/hooks/useFirebaseDrafts'
@@ -29,16 +29,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import CreativePreviewModal from '@/components/CreativePreviewModal'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -204,7 +196,7 @@ function SearchableSelect({
   const [open, setOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [isAddingNew, setIsAddingNew] = useState(false)
-  const { addNewTag, options: hookOptions, loading, refetch } = useTagOptions(fieldName)
+  const { addNewTag, options: hookOptions, loading } = useTagOptions(fieldName)
   const inputRef = useRef<HTMLInputElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [triggerWidth, setTriggerWidth] = useState(0)
@@ -267,7 +259,7 @@ function SearchableSelect({
             setSearchTerm('')
           }, 200)
         }
-      } catch (error) {
+      } catch {
         toast.error('Failed to add new tag')
       } finally {
         setIsAddingNew(false)
@@ -390,7 +382,7 @@ function SearchableSelect({
                     onClick={handleAddNew}
                   >
                     <Plus className="mr-2 h-4 w-4" />
-                    <span>Add "{searchTerm}" to {fieldName}</span>
+                    <span>Add &quot;{searchTerm}&quot; to {fieldName}</span>
                     {isAddingNew && (
                       <div className="ml-auto">
                         <div className="h-3 w-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -428,7 +420,7 @@ export default function SingleUploadPage() {
   const [currentStatus, setCurrentStatus] = useState<'draft' | 'saved'>('draft')
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const [hasChanges, setHasChanges] = useState(false)
-  const [countdown, setCountdown] = useState(30)
+  // const [countdown, setCountdown] = useState(30) // Currently unused
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, string>>({})
   
   // Helper function to handle AI suggestion acceptance
@@ -437,14 +429,16 @@ export default function SingleUploadPage() {
     if (suggestion) {
       try {
         const newValue = await addNewTag(suggestion)
-        form.setValue(fieldName as any, newValue)
+        form.setValue(fieldName as keyof FormData, newValue)
         markFieldAsAI(fieldName)
         setAiSuggestions(prev => {
-          const { [fieldName]: _, ...rest } = prev
+          const rest = Object.fromEntries(
+            Object.entries(prev).filter(([key]) => key !== fieldName)
+          )
           return rest
         })
         toast.success(`Added "${suggestion}" to ${fieldName}`)
-      } catch (error) {
+      } catch {
         toast.error('Failed to add suggestion')
       }
     }
@@ -453,7 +447,9 @@ export default function SingleUploadPage() {
   // Helper function to dismiss AI suggestion
   const dismissAiSuggestion = (fieldName: string) => {
     setAiSuggestions(prev => {
-      const { [fieldName]: _, ...rest } = prev
+      const rest = Object.fromEntries(
+        Object.entries(prev).filter(([key]) => key !== fieldName)
+      )
       return rest
     })
     toast.info('Suggestion dismissed')
@@ -461,10 +457,7 @@ export default function SingleUploadPage() {
   
   // Firebase drafts
   const {
-    drafts: firebaseDrafts,
     saveDraft: saveFirebaseDraft,
-    deleteDraft: deleteFirebaseDraft,
-    getDraft: getFirebaseDraft,
     isOnline,
   } = useFirebaseDrafts({ 
     userId: user?.uid || 'anonymous',
@@ -476,7 +469,6 @@ export default function SingleUploadPage() {
     aiFieldsSet,
     markFieldAsAI,
     removeAITag,
-    setMultipleAITags,
     clearAllAITags
   } = useAIFields()
 
@@ -486,18 +478,18 @@ export default function SingleUploadPage() {
   const { options: campaignTypeOptions, addNewTag: addCampaignTypeTag } = useTagOptions('campaignType')
   const { options: layoutTypeOptions, addNewTag: addLayoutTypeTag } = useTagOptions('creativeLayoutType')
   const { options: messagingOptions, addNewTag: addMessagingTag } = useTagOptions('messagingStructure')
-  const { options: imageryTypeOptions, addNewTag: addImageryTypeTag } = useTagOptions('imageryType')
-  const { options: imageryBgOptions, addNewTag: addImageryBgTag } = useTagOptions('imageryBackground')
-  const { options: headlineTagOptions, addNewTag: addHeadlineTag } = useTagOptions('headlineTags')
-  const { options: headlineIntentOptions, addNewTag: addHeadlineIntentTag } = useTagOptions('headlineIntent')
-  const { options: ctaVerbOptions, addNewTag: addCtaVerbTag } = useTagOptions('ctaVerb')
-  const { options: ctaStyleOptions, addNewTag: addCtaStyleTag } = useTagOptions('ctaStyleGroup')
-  const { options: ctaPositionOptions, addNewTag: addCtaPositionTag } = useTagOptions('ctaPosition')
-  const { options: ctaColorOptions, addNewTag: addCtaColorTag } = useTagOptions('ctaColor')
-  const { options: copyAngleOptions, addNewTag: addCopyAngleTag } = useTagOptions('copyAngle')
-  const { options: copyToneOptions, addNewTag: addCopyToneTag } = useTagOptions('copyTone')
-  const { options: personaOptions, addNewTag: addPersonaTag } = useTagOptions('audiencePersona')
-  const { options: triggerOptions, addNewTag: addTriggerTag } = useTagOptions('campaignTrigger')
+  const { options: imageryTypeOptions } = useTagOptions('imageryType')
+  const { options: imageryBgOptions } = useTagOptions('imageryBackground')
+  const { options: headlineTagOptions } = useTagOptions('headlineTags')
+  const { options: headlineIntentOptions } = useTagOptions('headlineIntent')
+  const { options: ctaVerbOptions } = useTagOptions('ctaVerb')
+  const { options: ctaStyleOptions } = useTagOptions('ctaStyleGroup')
+  const { options: ctaPositionOptions } = useTagOptions('ctaPosition')
+  const { options: ctaColorOptions } = useTagOptions('ctaColor')
+  const { options: copyAngleOptions } = useTagOptions('copyAngle')
+  const { options: copyToneOptions } = useTagOptions('copyTone')
+  const { options: personaOptions } = useTagOptions('audiencePersona')
+  const { options: triggerOptions } = useTagOptions('campaignTrigger')
 
   // Form initialization
   const form = useForm<FormData>({
@@ -584,7 +576,7 @@ export default function SingleUploadPage() {
       const newSuggestions: Record<string, string> = {}
 
       // Helper to conditionally set field or add as suggestion
-      const setField = (fieldName: keyof FormData, value: any, shouldSet: boolean, options?: any[]) => {
+      const setField = (fieldName: keyof FormData, value: string | string[] | boolean | undefined, shouldSet: boolean, options?: Array<{value: string, label: string}>) => {
         if (shouldSet && value !== undefined && value !== null && value !== '') {
           // Check if value exists in options (for select fields)
           if (options && typeof value === 'string') {
@@ -873,7 +865,7 @@ export default function SingleUploadPage() {
       } else {
         toast.info('No fields could be populated from the image')
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('AI analysis error:', error)
       toast.error('AI analysis failed. Please fill the form manually.')
     } finally {
@@ -907,8 +899,8 @@ export default function SingleUploadPage() {
         setLastSaved(new Date())
         setHasChanges(false)
       }
-    } catch (error) {
-      console.error('Auto-save failed:', error)
+    } catch {
+      console.error('Auto-save failed')
     }
   }
 
@@ -956,8 +948,8 @@ export default function SingleUploadPage() {
       setCurrentStatus('draft') // Reset status for new form
       clearAllAITags()
       setAiSuggestions({})
-    } catch (error) {
-      console.error('Save error:', error)
+    } catch {
+      console.error('Save error')
       toast.error('Failed to save creative')
     } finally {
       setIsSubmitting(false)
@@ -988,6 +980,7 @@ export default function SingleUploadPage() {
       }, 30000)
       return () => clearTimeout(timer)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasChanges, isOnline])
 
   // Watch form changes
@@ -1028,7 +1021,7 @@ export default function SingleUploadPage() {
             Object.keys(data.formData).forEach(key => {
               const value = data.formData[key]
               if (value !== undefined && value !== null) {
-                form.setValue(key as any, value)
+                form.setValue(key as keyof FormData, value)
               }
             })
           }
@@ -1050,8 +1043,8 @@ export default function SingleUploadPage() {
         } else {
           toast.error('Creative not found')
         }
-      } catch (error) {
-        console.error('Error loading creative:', error)
+      } catch {
+        console.error('Error loading creative')
         toast.error('Failed to load creative')
       } finally {
         setLoadingExistingData(false)

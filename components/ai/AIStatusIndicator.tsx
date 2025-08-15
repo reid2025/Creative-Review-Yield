@@ -42,15 +42,15 @@ export function AIStatusIndicator({ className = '', showDetails = false }: AISta
         await firebaseAIService.loadAvailableTags()
         setAiStatus('available')
         setStatusMessage(`AI ready (${health.model})`)
-      } catch (tagError) {
+      } catch {
         // AI is available but tags couldn't load
         setAiStatus('available')
         setStatusMessage('AI ready (limited tag validation)')
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('AI status check failed:', error)
       setAiStatus('error')
-      setStatusMessage(error.message || 'AI service unavailable')
+      setStatusMessage((error as Error).message || 'AI service unavailable')
     }
   }
 

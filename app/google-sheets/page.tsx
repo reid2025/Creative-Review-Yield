@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
   TableBody,
@@ -34,7 +33,6 @@ import {
   LogIn,
   LogOut,
   User,
-  AlertCircle,
   Loader2,
   ExternalLink,
   Copy,
@@ -58,35 +56,55 @@ const GOOGLE_CLIENT_ID = '277440481893-266hjhtdct3vmh1u3rs4cdtt9rrf6a8u.apps.goo
 
 declare global {
   interface Window {
-    google: any
-    gapi: any
+    google: {
+      accounts: {
+        oauth2: {
+          initTokenClient: (config: Record<string, unknown>) => unknown
+          revoke: (token: string) => void
+        }
+      }
+    }
+    gapi: {
+      load: (api: string, callback: () => void) => void
+      client: {
+        init: (config: Record<string, unknown>) => Promise<void>
+        load: (api: string, version: string) => Promise<void>
+        request: (config: Record<string, unknown>) => Promise<{result: {values?: string[][]}, status?: number}>
+        getToken: () => {access_token: string} | null
+        setToken: (token: {access_token: string} | null) => void
+      }
+      auth: {
+        setToken: (token: {access_token: string}) => void
+      }
+    }
     gapiInited: boolean
     gisInited: boolean
   }
 }
 
 interface SheetData {
-  data: any[]
+  data: Record<string, string>[]
   headers: string[]
   totalRows: number
 }
+
+// Rows per page for pagination
+const rowsPerPage = 20
 
 export default function GoogleSheetsPage() {
   // State
   const [isSignedIn, setIsSignedIn] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
   const [fetchingData, setFetchingData] = useState(false)
   const [sheetData, setSheetData] = useState<SheetData | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [filteredData, setFilteredData] = useState<any[]>([])
-  const [tokenClient, setTokenClient] = useState<any>(null)
+  const [filteredData, setFilteredData] = useState<Record<string, string>[]>([])
+  const [tokenClient, setTokenClient] = useState<unknown>(null)
   const [gapiInited, setGapiInited] = useState(false)
   const [gisInited, setGisInited] = useState(false)
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
-  const [rowsPerPage, setRowsPerPage] = useState(20)
   const [showLatestOnly, setShowLatestOnly] = useState(true)
   
   // Hover preview state
@@ -150,7 +168,7 @@ export default function GoogleSheetsPage() {
       const client = window.google.accounts.oauth2.initTokenClient({
         client_id: GOOGLE_CLIENT_ID,
         scope: SCOPES,
-        callback: (response: any) => {
+        callback: (response: {error?: string, access_token?: string}) => {
           console.log('Token response:', response)
           if (response.error) {
             toast.error(`Authentication failed: ${response.error}`)
@@ -214,7 +232,7 @@ export default function GoogleSheetsPage() {
     }
     
     // Request access token
-    tokenClient.requestAccessToken({ prompt: 'consent' })
+    ;(tokenClient as {requestAccessToken: (params: {prompt: string}) => void}).requestAccessToken({ prompt: 'consent' })
   }
   
   // Handle Sign Out
@@ -268,8 +286,8 @@ export default function GoogleSheetsPage() {
       const headers = rows[0]
       
       // Convert rows to objects
-      const data = rows.slice(1).map((row: any[]) => {
-        const obj: any = {}
+      const data = rows.slice(1).map((row: string[]) => {
+        const obj: Record<string, string> = {}
         headers.forEach((header: string, index: number) => {
           obj[header] = row[index] || ''
         })
@@ -284,18 +302,19 @@ export default function GoogleSheetsPage() {
       
       setFilteredData(data)
       toast.success(`Loaded ${data.length} rows from Google Sheets`)
-    } catch (error: any) {
-      console.error('Error fetching sheet data:', error)
-      console.error('Error details:', error.result?.error)
+    } catch (error) {
+      const err = error as {status?: number, result?: {error?: {message?: string}}, message?: string}
+      console.error('Error fetching sheet data:', err)
+      console.error('Error details:', err.result?.error)
       
-      if (error.status === 403) {
+      if (err.status === 403) {
         toast.error('Access denied. Make sure you have permission to view this spreadsheet.')
-      } else if (error.status === 404) {
+      } else if (err.status === 404) {
         toast.error('Spreadsheet not found. Check the spreadsheet ID.')
-      } else if (error.status === 400) {
+      } else if (err.status === 400) {
         toast.error('Invalid request. Check the spreadsheet ID and range.')
       } else {
-        toast.error(error.result?.error?.message || error.message || 'Failed to fetch spreadsheet data')
+        toast.error(err.result?.error?.message || err.message || 'Failed to fetch spreadsheet data')
       }
     } finally {
       setFetchingData(false)
@@ -617,6 +636,7 @@ export default function GoogleSheetsPage() {
                                   <TableCell key={colIndex} className="text-xs py-2">
                                     {isImageUrl ? (
                                       <div className="relative">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img
                                           src={value}
                                           alt={header}
@@ -726,11 +746,12 @@ export default function GoogleSheetsPage() {
           }}
         >
           <div className="bg-white p-3 rounded-lg shadow-2xl border-2 border-gray-300">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={hoveredImage.url}
               alt="Preview"
               className="max-w-[400px] max-h-[400px] object-contain"
-              onError={(e) => {
+              onError={() => {
                 setHoveredImage(null)
               }}
             />

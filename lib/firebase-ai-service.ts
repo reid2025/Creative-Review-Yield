@@ -5,8 +5,8 @@ import { tagService } from './firebase-tag-service'
 import { getAuth } from 'firebase/auth'
 import { env } from './env'
 
-let vertexAI: any = null
-let model: any = null
+let vertexAI: ReturnType<typeof getVertexAI> | null = null
+let model: ReturnType<typeof getGenerativeModel> | null = null
 
 // Initialize Vertex AI if enabled
 if (env.vertexAI.enabled) {
@@ -23,8 +23,8 @@ if (env.vertexAI.enabled) {
       
       // App Check is handled in firebase.ts
       console.log('   ℹ️ App Check configuration handled in firebase.ts')
-    } catch (err: any) {
-      console.error('   ❌ Failed to initialize Vertex AI:', err.message)
+    } catch (err) {
+      console.error('   ❌ Failed to initialize Vertex AI:', (err as Error).message)
       throw err
     }
 
@@ -57,7 +57,7 @@ if (env.vertexAI.enabled) {
         console.log(`   ✅ Successfully initialized with ${modelName}`)
         modelInitialized = true
         break
-      } catch (err) {
+      } catch {
         console.log(`   ❌ ${modelName} not available`)
       }
     }
@@ -67,12 +67,12 @@ if (env.vertexAI.enabled) {
     }
     console.log('✅ Vertex AI initialized successfully!')
     console.log('   Ready to analyze real images with Gemini Pro')
-  } catch (error: any) {
-    console.error('❌ Failed to initialize Vertex AI:', error.message || error)
-    if (error.message?.includes('404')) {
+  } catch (error) {
+    console.error('❌ Failed to initialize Vertex AI:', (error as Error).message || error)
+    if ((error as Error).message?.includes('404')) {
       console.error('   🔧 Fix: Enable Vertex AI API in Google Cloud Console')
       console.error('   📖 See VERTEX_AI_SETUP_GUIDE.md for instructions')
-    } else if (error.message?.includes('403') || error.message?.includes('permission')) {
+    } else if ((error as Error).message?.includes('403') || (error as Error).message?.includes('permission')) {
       console.error('   💳 Fix: Enable billing (Blaze plan) in Firebase Console')
       console.error('   📖 See VERTEX_AI_SETUP_GUIDE.md for instructions')
     }
@@ -163,7 +163,7 @@ class FirebaseAIService {
   /**
    * Convert image file to base64 for Gemini API
    */
-  private async fileToGenerativePart(file: File): Promise<any> {
+  private async fileToGenerativePart(file: File): Promise<{inlineData: {data: string, mimeType: string}}> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
       reader.onloadend = () => {
@@ -385,18 +385,18 @@ Return ONLY the JSON object, no additional text or explanation.`
   ): Promise<T> {
     try {
       return await fn()
-    } catch (error: any) {
+    } catch (error) {
       if (retries <= 0) {
         throw error
       }
       
       // Check if error is retryable
       const isRetryable = 
-        error.message?.includes('503') || // Service unavailable
-        error.message?.includes('500') || // Internal server error
-        error.message?.includes('429') || // Rate limited
-        error.message?.includes('timeout') || // Timeout
-        error.message?.includes('ECONNRESET') // Connection reset
+        (error as Error).message?.includes('503') || // Service unavailable
+        (error as Error).message?.includes('500') || // Internal server error
+        (error as Error).message?.includes('429') || // Rate limited
+        (error as Error).message?.includes('timeout') || // Timeout
+        (error as Error).message?.includes('ECONNRESET') // Connection reset
       
       if (!isRetryable) {
         throw error
@@ -465,7 +465,7 @@ Return ONLY the JSON object, no additional text or explanation.`
       console.log('   Timestamp:', new Date().toISOString())
       console.log('═══════════════════════════════════════════════')
       
-      let result, response, text
+      let text
       try {
         console.log('⏳ Sending request to Gemini...')
         console.log('   Attempting to bypass App Check...')
@@ -499,10 +499,10 @@ Return ONLY the JSON object, no additional text or explanation.`
         console.log('   This is REAL AI analysis from Google Gemini')
         console.log('═══════════════════════════════════════════════')
         
-      } catch (apiError: any) {
+      } catch (apiError) {
         console.error('❌ ═══════════════════════════════════════════')
         console.error('❌ GEMINI API ERROR!')
-        console.error('   Error:', apiError.message)
+        console.error('   Error:', (apiError as Error).message)
         console.error('═══════════════════════════════════════════════')
         
         // Enhanced error handling with specific messages
@@ -609,7 +609,7 @@ Return ONLY the JSON object, no additional text or explanation.`
         console.log('═══════════════════════════════════════════════')
         
         return analysisResult
-      } catch (parseError) {
+      } catch {
         console.error('Failed to parse AI response:', text?.substring(0, 500))
         
         // Try to extract partial data even if JSON is malformed
@@ -619,7 +619,7 @@ Return ONLY the JSON object, no additional text or explanation.`
             console.log('📊 Recovered partial data from malformed response')
             return partialResult
           }
-        } catch (recoveryError) {
+        } catch {
           console.error('Could not recover partial data')
         }
         
@@ -662,7 +662,7 @@ Return ONLY the JSON object, no additional text or explanation.`
           const closestMatch = this.findClosestMatch(value, availableValues)
           if (closestMatch) {
             needsReview.push(`${field}: AI suggested "${value}", using closest match "${closestMatch.label}"`)
-            ;(validated as any)[field] = closestMatch.value
+            ;(validated as Record<string, string | string[]>)[field] = closestMatch.value
           } else {
             needsReview.push(`${field}: "${value}" not in tag glossary`)
           }
@@ -695,7 +695,7 @@ Return ONLY the JSON object, no additional text or explanation.`
           }
         })
         
-        ;(validated as any)[field] = validatedValues
+        ;(validated as Record<string, string | string[]>)[field] = validatedValues
       }
     })
 
@@ -761,7 +761,7 @@ Return ONLY the JSON object, no additional text or explanation.`
     for (const [field, pattern] of Object.entries(patterns)) {
       const match = text.match(pattern)
       if (match && match[1]) {
-        (result as any)[field] = match[1]
+        (result as Record<string, string>)[field] = match[1]
       }
     }
     
@@ -808,17 +808,17 @@ Return ONLY the JSON object, no additional text or explanation.`
       }
 
       // Get model info
-      const modelName = (model as any)?._modelParams?.model || 'unknown'
+      const modelName = (model as {_modelParams?: {model?: string}})?._modelParams?.model || 'unknown'
 
       return {
         available: true,
         model: modelName
       }
-    } catch (error: any) {
+    } catch (error) {
       return {
         available: false,
         model: null,
-        error: error.message || 'Unknown error'
+        error: (error as Error).message || 'Unknown error'
       }
     }
   }

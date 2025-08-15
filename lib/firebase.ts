@@ -3,7 +3,8 @@ import { initializeApp } from 'firebase/app'
 import { getFirestore } from 'firebase/firestore'
 import { getAuth } from 'firebase/auth'
 import { getStorage } from 'firebase/storage'
-import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check'
+// App Check imports - keeping for future use
+// import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check'
 import { env } from './env'
 
 const firebaseConfig = {

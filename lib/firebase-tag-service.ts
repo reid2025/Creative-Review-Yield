@@ -2,13 +2,12 @@ import {
   collection, 
   doc, 
   setDoc, 
-  getDoc, 
+ 
   getDocs, 
   updateDoc, 
   deleteDoc, 
   query, 
   where, 
-  orderBy,
   serverTimestamp,
   Timestamp,
   writeBatch
@@ -373,7 +372,7 @@ class FirebaseTagService {
   
   
   // Get tag performance analytics
-  async getTagPerformance(tagId: string): Promise<any> {
+  async getTagPerformance(): Promise<Record<string, number>> {
     // This would query creatives collection to calculate performance
     // For now, returning mock data
     return {
