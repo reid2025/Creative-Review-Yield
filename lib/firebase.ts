@@ -4,15 +4,16 @@ import { getFirestore } from 'firebase/firestore'
 import { getAuth } from 'firebase/auth'
 import { getStorage } from 'firebase/storage'
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check'
+import { env } from './env'
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCap_nB0GGFPShkyndSkoHCYmC39Ykq92A",
-  authDomain: "creative-review-yield.firebaseapp.com",
-  projectId: "creative-review-yield",
-  storageBucket: "creative-review-yield.firebasestorage.app",
-  messagingSenderId: "1098754850633",
-  appId: "1:1098754850633:web:211a057fd8759338816498",
-  measurementId: "G-1HEL176862"
+  apiKey: env.firebase.apiKey,
+  authDomain: env.firebase.authDomain,
+  projectId: env.firebase.projectId,
+  storageBucket: env.firebase.storageBucket,
+  messagingSenderId: env.firebase.messagingSenderId,
+  appId: env.firebase.appId,
+  measurementId: env.firebase.measurementId
 };
 
 // Initialize Firebase
