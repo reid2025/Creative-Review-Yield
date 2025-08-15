@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import NextImage from 'next/image'
 import { 
@@ -114,7 +114,7 @@ interface AnalysisSection {
   confidence?: number
 }
 
-export default function StrategySyncPage() {
+function StrategySyncContent() {
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -1036,5 +1036,26 @@ export default function StrategySyncPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// Loading component for Suspense
+function StrategySyncLoading() {
+  return (
+    <div className="container mx-auto p-6">
+      <div className="space-y-4">
+        <Skeleton className="h-12 w-64" />
+        <Skeleton className="h-96 w-full" />
+      </div>
+    </div>
+  )
+}
+
+// Main export with Suspense wrapper
+export default function StrategySyncPage() {
+  return (
+    <Suspense fallback={<StrategySyncLoading />}>
+      <StrategySyncContent />
+    </Suspense>
   )
 }

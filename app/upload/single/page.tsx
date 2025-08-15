@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -399,7 +399,7 @@ function SearchableSelect({
   )
 }
 
-export default function SingleUploadPage() {
+function SingleUploadContent() {
   const { user } = useAuth()
   const searchParams = useSearchParams()
   const editId = searchParams.get('edit')
@@ -1867,5 +1867,32 @@ export default function SingleUploadPage() {
         />
       </div>
     </ProtectedRoute>
+  )
+}
+
+// Loading component for Suspense
+function SingleUploadLoading() {
+  return (
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="mx-auto max-w-2xl">
+        <Card>
+          <CardContent className="py-12">
+            <div className="flex flex-col items-center justify-center space-y-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+              <p className="text-gray-600">Loading...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+// Main export with Suspense wrapper
+export default function SingleUploadPage() {
+  return (
+    <Suspense fallback={<SingleUploadLoading />}>
+      <SingleUploadContent />
+    </Suspense>
   )
 }

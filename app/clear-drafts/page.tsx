@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { DraftStorage } from "@/utils/draftStorage.v2"
+import { DraftStorageV2 as DraftStorage } from "@/utils/draftStorage.v2"
 
 export default function ClearDraftsPage() {
   const [draftsCount, setDraftsCount] = useState(0)
