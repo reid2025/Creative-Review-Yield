@@ -89,6 +89,9 @@ export default function GoogleSheetsPage() {
   const [rowsPerPage, setRowsPerPage] = useState(20)
   const [showLatestOnly, setShowLatestOnly] = useState(true)
   
+  // Hover preview state
+  const [hoveredImage, setHoveredImage] = useState<{url: string, x: number, y: number} | null>(null)
+  
   // Filter data based on search and latest
   useEffect(() => {
     if (!sheetData) {
@@ -583,13 +586,73 @@ export default function GoogleSheetsPage() {
                               <TableCell className="font-medium text-xs py-2">
                                 {((currentPage - 1) * rowsPerPage) + rowIndex + 1}
                               </TableCell>
-                              {sheetData.headers.slice(0, 10).map((header, colIndex) => (
-                                <TableCell key={colIndex} className="text-xs py-2">
-                                  <div className="max-w-[200px] truncate" title={row[header]}>
-                                    {row[header] || '-'}
-                                  </div>
-                                </TableCell>
-                              ))}
+                              {sheetData.headers.slice(0, 10).map((header, colIndex) => {
+                                const value = row[header]
+                                // Check if this is an image-related column or contains image URL
+                                const isImageColumn = header.toLowerCase().includes('image') || 
+                                                     header.toLowerCase().includes('creative') ||
+                                                     header.toLowerCase().includes('asset')
+                                
+                                const isImageUrl = value && typeof value === 'string' && (
+                                  // Direct image URLs
+                                  (value.startsWith('http') && 
+                                   (value.includes('.jpg') || 
+                                    value.includes('.jpeg') || 
+                                    value.includes('.png') || 
+                                    value.includes('.gif') || 
+                                    value.includes('.webp') ||
+                                    value.includes('.svg'))) ||
+                                  // Google services
+                                  value.includes('googleusercontent.com') ||
+                                  value.includes('drive.google.com/uc') ||
+                                  value.includes('lh3.googleusercontent.com') ||
+                                  // Facebook CDN
+                                  value.includes('scontent') ||
+                                  value.includes('fbcdn.net') ||
+                                  // Check if it's a Facebook ads manager URL that might have image
+                                  (isImageColumn && value.includes('facebook.com/ads/'))
+                                )
+                                
+                                return (
+                                  <TableCell key={colIndex} className="text-xs py-2">
+                                    {isImageUrl ? (
+                                      <div className="relative">
+                                        <img
+                                          src={value}
+                                          alt={header}
+                                          className="h-12 w-12 object-cover rounded cursor-pointer border hover:border-blue-500"
+                                          onClick={() => window.open(value, '_blank')}
+                                          onMouseEnter={(e) => {
+                                            const rect = e.currentTarget.getBoundingClientRect()
+                                            setHoveredImage({
+                                              url: value,
+                                              x: rect.left,
+                                              y: rect.top
+                                            })
+                                          }}
+                                          onMouseLeave={() => setHoveredImage(null)}
+                                          onError={(e) => {
+                                            const target = e.target as HTMLImageElement
+                                            target.style.display = 'none'
+                                            const fallback = target.nextSibling as HTMLElement
+                                            if (fallback) fallback.style.display = 'block'
+                                          }}
+                                        />
+                                        <div 
+                                          className="hidden text-xs text-gray-500 truncate max-w-[200px]"
+                                          title={value}
+                                        >
+                                          {value}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="max-w-[200px] truncate" title={value || '-'}>
+                                        {value || '-'}
+                                      </div>
+                                    )}
+                                  </TableCell>
+                                )
+                              })}
                               {sheetData.headers.length > 10 && (
                                 <TableCell className="text-xs py-2 text-gray-500">
                                   ...
@@ -652,6 +715,28 @@ export default function GoogleSheetsPage() {
           </a>
         </div>
       </div>
+      
+      {/* Floating Image Preview */}
+      {hoveredImage && (
+        <div 
+          className="fixed z-[9999] pointer-events-none"
+          style={{
+            left: `${hoveredImage.x + 60}px`,
+            top: `${Math.min(hoveredImage.y, window.innerHeight - 450)}px`,
+          }}
+        >
+          <div className="bg-white p-3 rounded-lg shadow-2xl border-2 border-gray-300">
+            <img
+              src={hoveredImage.url}
+              alt="Preview"
+              className="max-w-[400px] max-h-[400px] object-contain"
+              onError={(e) => {
+                setHoveredImage(null)
+              }}
+            />
+          </div>
+        </div>
+      )}
     </>
   )
 }
