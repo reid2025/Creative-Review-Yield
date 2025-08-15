@@ -3,12 +3,13 @@ import { getVertexAI, getGenerativeModel } from '@firebase/vertexai'
 import app from './firebase' // Changed to default import
 import { tagService } from './firebase-tag-service'
 import { getAuth } from 'firebase/auth'
+import { env } from './env'
 
 let vertexAI: any = null
 let model: any = null
 
 // Initialize Vertex AI if enabled
-if (process.env.NEXT_PUBLIC_VERTEX_AI_ENABLED === 'true') {
+if (env.vertexAI.enabled) {
   try {
     console.log('🔄 Initializing Vertex AI...')
     console.log('   Project:', 'creative-review-yield')
@@ -79,7 +80,7 @@ if (process.env.NEXT_PUBLIC_VERTEX_AI_ENABLED === 'true') {
     model = null
   }
 } else {
-  console.log('⚠️ Vertex AI not enabled (set NEXT_PUBLIC_VERTEX_AI_ENABLED=true in .env.local)')
+  console.log('⚠️ Vertex AI not enabled (set vertexAI.enabled=true in env.ts)')
 }
 
 export interface CreativeAnalysisResult {
@@ -415,7 +416,7 @@ Return ONLY the JSON object, no additional text or explanation.`
     console.log('🚀 IMAGE ANALYSIS STARTING')
     console.log('═══════════════════════════════════════════════')
     console.log('📊 Current Settings:')
-    console.log('   VERTEX_AI_ENABLED:', process.env.NEXT_PUBLIC_VERTEX_AI_ENABLED)
+    console.log('   VERTEX_AI_ENABLED:', env.vertexAI.enabled)
     console.log('   Model Status:', model ? '✅ LOADED' : '❌ NOT LOADED')
     console.log('   Model Type:', model?._modelParams?.model || 'N/A')
     console.log('📁 Image Details:')
@@ -437,8 +438,8 @@ Return ONLY the JSON object, no additional text or explanation.`
         console.error('═══════════════════════════════════════════════')
         
         // Provide helpful error with specific reason
-        const errorMessage = process.env.NEXT_PUBLIC_VERTEX_AI_ENABLED !== 'true' 
-          ? 'AI service is disabled. Enable it by setting NEXT_PUBLIC_VERTEX_AI_ENABLED=true in .env.local'
+        const errorMessage = !env.vertexAI.enabled 
+          ? 'AI service is disabled. Enable it by setting vertexAI.enabled=true in env.ts'
           : 'AI model failed to initialize. Check console for setup instructions.'
         throw new Error(errorMessage)
       }
@@ -789,7 +790,7 @@ Return ONLY the JSON object, no additional text or explanation.`
   }> {
     try {
       // Check if Vertex AI is enabled
-      if (process.env.NEXT_PUBLIC_VERTEX_AI_ENABLED !== 'true') {
+      if (!env.vertexAI.enabled) {
         return {
           available: false,
           model: null,

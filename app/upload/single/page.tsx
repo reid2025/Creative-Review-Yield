@@ -17,6 +17,9 @@ import { useAuth } from '@/contexts/AuthContext'
 import { AIStatusIndicator } from '@/components/ai/AIStatusIndicator'
 import { useTagOptions } from '@/hooks/useTagOptions'
 import { toast } from 'sonner'
+import { useSearchParams } from 'next/navigation'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 
 // shadcn/ui components
 import { Button } from '@/components/ui/button'
@@ -406,6 +409,10 @@ function SearchableSelect({
 
 export default function SingleUploadPage() {
   const { user } = useAuth()
+  const searchParams = useSearchParams()
+  const editId = searchParams.get('edit')
+  const resumeId = searchParams.get('resumeId')
+  
   const [showImage, setShowImage] = useState(false)
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -415,6 +422,7 @@ export default function SingleUploadPage() {
   const [showClearFormConfirm, setShowClearFormConfirm] = useState(false)
   const [pendingAIMode, setPendingAIMode] = useState<'empty' | 'all' | null>(null)
   const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null)
+  const [loadingExistingData, setLoadingExistingData] = useState(false)
   const [currentFirebaseDocId, setCurrentFirebaseDocId] = useState<string | null>(null)
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null)
   const [currentStatus, setCurrentStatus] = useState<'draft' | 'saved'>('draft')
@@ -908,6 +916,8 @@ export default function SingleUploadPage() {
   const handleSubmit = async (data: FormData) => {
     setIsSubmitting(true)
     try {
+      const isEditing = !!editId
+      
       // Save creative with 'saved' status
       const finalData: Partial<FirebaseDraftData> = {
         id: currentFirebaseDocId || undefined,
@@ -924,16 +934,23 @@ export default function SingleUploadPage() {
       
       if (docId) {
         setCurrentStatus('saved') // Update status to saved
-        toast.success('Creative saved successfully! Status: Saved')
+        toast.success(isEditing ? 'Creative updated successfully!' : 'Creative saved successfully! Status: Saved')
+        
+        // Update the current doc ID if this was a new save
+        if (!currentFirebaseDocId) {
+          setCurrentFirebaseDocId(docId)
+        }
       } else {
         throw new Error('Failed to save creative')
       }
       
-      // Reset form and start fresh
-      form.reset()
-      setShowImage(false)
-      setImagePreviewUrl(null)
-      setUploadedImageFile(null)
+      // Only reset form if not editing
+      if (!isEditing) {
+        form.reset()
+        setShowImage(false)
+        setImagePreviewUrl(null)
+        setUploadedImageFile(null)
+      }
       setCurrentDraftId(null)
       setCurrentFirebaseDocId(null)
       setCurrentStatus('draft') // Reset status for new form
@@ -985,6 +1002,84 @@ export default function SingleUploadPage() {
     })
     return () => subscription.unsubscribe()
   }, [form, aiFieldsSet, aiLoading, removeAITag])
+
+  // Load data when editing an existing creative
+  useEffect(() => {
+    const loadExistingData = async () => {
+      const idToLoad = editId || resumeId
+      if (!idToLoad || !user) return
+      
+      setLoadingExistingData(true)
+      try {
+        // Load from Firebase
+        const docRef = doc(db, 'creatives', idToLoad)
+        const docSnap = await getDoc(docRef)
+        
+        if (docSnap.exists()) {
+          const data = docSnap.data()
+          setCurrentFirebaseDocId(docSnap.id)
+          setCurrentDraftId(data.draftId)
+          setCurrentStatus(data.status || 'draft')
+          setLastSaved(data.lastSaved?.toDate() || null)
+          
+          // Load form data
+          if (data.formData) {
+            // Reset form with the loaded data
+            Object.keys(data.formData).forEach(key => {
+              const value = data.formData[key]
+              if (value !== undefined && value !== null) {
+                form.setValue(key as any, value)
+              }
+            })
+          }
+          
+          // Load image if exists
+          if (data.imageUrl) {
+            setImagePreviewUrl(data.imageUrl)
+            setShowImage(true)
+          }
+          
+          // Mark AI fields
+          if (data.aiPopulatedFields && Array.isArray(data.aiPopulatedFields)) {
+            data.aiPopulatedFields.forEach((field: string) => {
+              markFieldAsAI(field)
+            })
+          }
+          
+          toast.success(editId ? 'Creative loaded for editing' : 'Draft resumed successfully')
+        } else {
+          toast.error('Creative not found')
+        }
+      } catch (error) {
+        console.error('Error loading creative:', error)
+        toast.error('Failed to load creative')
+      } finally {
+        setLoadingExistingData(false)
+      }
+    }
+    
+    loadExistingData()
+  }, [editId, resumeId, user, form, markFieldAsAI])
+
+  // Show loading state while fetching existing data
+  if (loadingExistingData) {
+    return (
+      <ProtectedRoute>
+        <div className="min-h-screen bg-gray-50 p-6">
+          <div className="mx-auto max-w-2xl">
+            <Card>
+              <CardContent className="py-12">
+                <div className="flex flex-col items-center justify-center space-y-4">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                  <p className="text-gray-600">Loading creative data...</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </ProtectedRoute>
+    )
+  }
 
   // Image upload section
   if (!showImage) {

@@ -122,11 +122,10 @@ export default function CreativesPage() {
   const [filterLitigation, setFilterLitigation] = useState<string>('all')
   const [filterCampaign, setFilterCampaign] = useState<string>('all')
   const [filterDesigner, setFilterDesigner] = useState<string>('all')
-  const [filterStatus, setFilterStatus] = useState<string>('all')
   const [showFilters, setShowFilters] = useState(false)
   const [selectedCreativeForView, setSelectedCreativeForView] = useState<Creative | null>(null)
 
-  // Fetch creatives from Firebase
+  // Fetch creatives from Firebase and filter for saved only
   useEffect(() => {
     if (!user) return
 
@@ -139,14 +138,17 @@ export default function CreativesPage() {
       const creativesData: Creative[] = []
       snapshot.forEach((doc) => {
         const data = doc.data()
-        creativesData.push({
-          id: doc.id,
-          ...data.formData,
-          imageUrl: data.imageUrl,
-          status: data.status,
-          createdAt: data.createdAt,
-          lastSaved: data.lastSaved
-        } as Creative)
+        // Only include saved creatives (filter in memory)
+        if (data.status === 'saved') {
+          creativesData.push({
+            id: doc.id,
+            ...data.formData,
+            imageUrl: data.imageUrl,
+            status: data.status,
+            createdAt: data.createdAt,
+            lastSaved: data.lastSaved
+          } as Creative)
+        }
       })
       setCreatives(creativesData)
       setFilteredCreatives(creativesData)
@@ -202,14 +204,7 @@ export default function CreativesPage() {
       filtered = filtered.filter(c => c.designer === filterDesigner)
     }
 
-    // Status filter
-    if (filterStatus === 'draft') {
-      filtered = filtered.filter(c => c.status === 'draft')
-    } else if (filterStatus === 'saved') {
-      filtered = filtered.filter(c => c.status === 'saved')
-    } else if (filterStatus === 'top') {
-      filtered = filtered.filter(c => c.markedAsTopAd)
-    }
+    // No status filter needed - all items here are saved creatives
 
     // Sort
     filtered.sort((a, b) => {
@@ -224,7 +219,7 @@ export default function CreativesPage() {
     })
 
     setFilteredCreatives(filtered)
-  }, [creatives, searchQuery, filterLitigation, filterCampaign, filterDesigner, filterStatus, sortField, sortDirection])
+  }, [creatives, searchQuery, filterLitigation, filterCampaign, filterDesigner, sortField, sortDirection])
 
   // Handle selection
   const handleSelectCreative = (id: string) => {
@@ -284,14 +279,12 @@ export default function CreativesPage() {
     setFilterLitigation('all')
     setFilterCampaign('all')
     setFilterDesigner('all')
-    setFilterStatus('all')
   }
 
   const activeFilterCount = [
     filterLitigation !== 'all',
     filterCampaign !== 'all',
     filterDesigner !== 'all',
-    filterStatus !== 'all',
     searchQuery !== ''
   ].filter(Boolean).length
 
@@ -310,10 +303,10 @@ export default function CreativesPage() {
     <div className="container mx-auto p-6 max-w-7xl">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold">All Creatives</h1>
+        <h1 className="text-3xl font-bold">Creatives Library</h1>
         <p className="text-gray-600 mt-2">
-          {creatives.length} total creatives ({creatives.filter(c => c.status === 'draft').length} drafts, {creatives.filter(c => c.status === 'saved').length} saved) • {filteredCreatives.length} showing
-          {selectedCreatives.size > 0 && ` • ${selectedCreatives.size} selected`}
+          {creatives.length} saved creatives - {filteredCreatives.length} showing
+          {selectedCreatives.size > 0 && ' - ' + selectedCreatives.size + ' selected'}
         </p>
       </div>
 
@@ -365,7 +358,7 @@ export default function CreativesPage() {
         {/* Filter Panel */}
         {showFilters && (
           <Card className="p-4">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <Label className="text-xs">Litigation</Label>
                 <Select value={filterLitigation} onValueChange={setFilterLitigation}>
@@ -375,7 +368,7 @@ export default function CreativesPage() {
                   <SelectContent>
                     <SelectItem value="all">All Litigations</SelectItem>
                     {uniqueLitigations.map(lit => (
-                      <SelectItem key={lit} value={lit}>{lit}</SelectItem>
+                      <SelectItem key={lit} value={lit as string}>{lit as string}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -390,7 +383,7 @@ export default function CreativesPage() {
                   <SelectContent>
                     <SelectItem value="all">All Campaigns</SelectItem>
                     {uniqueCampaigns.map(camp => (
-                      <SelectItem key={camp} value={camp}>{camp}</SelectItem>
+                      <SelectItem key={camp} value={camp as string}>{camp as string}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -405,23 +398,8 @@ export default function CreativesPage() {
                   <SelectContent>
                     <SelectItem value="all">All Designers</SelectItem>
                     {uniqueDesigners.map(designer => (
-                      <SelectItem key={designer} value={designer}>{designer}</SelectItem>
+                      <SelectItem key={designer} value={designer as string}>{designer as string}</SelectItem>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label className="text-xs">Status</Label>
-                <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="draft">Drafts Only</SelectItem>
-                    <SelectItem value="saved">Saved Only</SelectItem>
-                    <SelectItem value="top">Top Ads Only</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -436,6 +414,7 @@ export default function CreativesPage() {
                 </Button>
               </div>
             </div>
+            
           </Card>
         )}
       </div>
@@ -465,6 +444,7 @@ export default function CreativesPage() {
             </Button>
           </div>
         </div>
+        
       )}
 
       {/* Content Area */}
@@ -560,12 +540,7 @@ export default function CreativesPage() {
                             {creative.markedAsTopAd && (
                               <Badge variant="default" className="text-xs">Top Ad</Badge>
                             )}
-                            {creative.status === 'draft' && (
-                              <Badge variant="secondary" className="text-xs">Draft</Badge>
-                            )}
-                            {creative.status === 'saved' && (
-                              <Badge variant="outline" className="text-xs">Saved</Badge>
-                            )}
+                            <Badge variant="outline" className="text-xs">Saved</Badge>
                           </div>
                         </TableCell>
                         <TableCell className="text-right">

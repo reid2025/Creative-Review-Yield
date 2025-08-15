@@ -1,327 +1,698 @@
-"use client"
+'use client'
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Calendar, FileText, User, Play, Trash2, Image, Cloud, CloudOff, RefreshCw } from "lucide-react"
-import { DraftStorageV2 } from "@/utils/draftStorage.v2"
-import { useFirebaseDrafts } from "@/hooks/useFirebaseDrafts"
-import { FirebaseDraftData } from "@/lib/firebase-draft-service"
-import { PageContainer, PageHeader } from "@/components/layout/PageContainer"
-// Removed unused import - AITag component
-import { toast } from "sonner"
-import Link from "next/link"
-import NextImage from "next/image"
+import { useState, useEffect, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
+import NextImage from 'next/image'
+import { 
+  collection, 
+  query, 
+  where, 
+  orderBy, 
+  onSnapshot, 
+  deleteDoc,
+  doc,
+  Timestamp
+} from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import { useAuth } from '@/contexts/AuthContext'
+import { format } from 'date-fns'
+import { toast } from 'sonner'
+
+// UI Components
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Skeleton } from '@/components/ui/skeleton'
+import CreativePreviewModal from '@/components/CreativePreviewModal'
+
+// Icons
+import { 
+  Search, 
+  Filter, 
+  MoreVertical, 
+  Eye, 
+  Edit, 
+  Trash2, 
+  Pin,
+  ArrowUpDown,
+  Grid3X3,
+  TableIcon,
+  Download,
+  ChevronDown,
+  X,
+  CheckCircle2,
+  ImageIcon,
+  TrendingUp,
+  TrendingDown,
+  Loader2
+} from 'lucide-react'
+
+interface Creative {
+  id: string
+  creativeFilename: string
+  imageUrl?: string
+  litigationName?: string
+  campaignType?: string
+  designer?: string
+  startDate?: string
+  endDate?: string
+  amountSpent?: string
+  costPerClick?: string
+  costPerWebsiteLead?: string
+  markedAsTopAd?: boolean
+  status?: 'draft' | 'saved'
+  createdAt?: Timestamp
+  lastSaved?: Timestamp
+  
+  // Additional fields from form
+  creativeLayoutType?: string
+  imageryType?: string[]
+  imageryBackground?: string[]
+  messagingStructure?: string
+  headlineText?: string
+  ctaLabel?: string
+  ctaColor?: string
+  ctaPosition?: string
+  copyAngle?: string[]
+  copyTone?: string[]
+  audiencePersona?: string
+}
 
 export default function DraftsPage() {
-  // Firebase drafts integration with real-time updates
-  const {
-    drafts: firebaseDrafts,
-    isLoading: draftsLoading,
-    deleteDraft: deleteFirebaseDraft,
-    refreshDrafts,
-    isOnline,
-    trackingStats,
-    error
-  } = useFirebaseDrafts({ enableRealTime: true })
+  const { user } = useAuth()
+  const router = useRouter()
   
-  const [isDeleting, setIsDeleting] = useState<string | null>(null)
+  // State
+  const [creatives, setCreatives] = useState<Creative[]>([])
+  const [filteredCreatives, setFilteredCreatives] = useState<Creative[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedCreatives, setSelectedCreatives] = useState<Set<string>>(new Set())
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortField, setSortField] = useState<keyof Creative>('lastSaved')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table')
+  
+  // Filters
+  const [filterLitigation, setFilterLitigation] = useState<string>('all')
+  const [filterCampaign, setFilterCampaign] = useState<string>('all')
+  const [filterDesigner, setFilterDesigner] = useState<string>('all')
+  const [showFilters, setShowFilters] = useState(false)
+  const [selectedCreativeForView, setSelectedCreativeForView] = useState<Creative | null>(null)
 
-  // Legacy support for local storage migration
+  // Fetch creatives from Firebase and filter for drafts only
   useEffect(() => {
-    // Run legacy migration on first load
-    DraftStorageV2.migrateFromV1()
-  }, [])
+    if (!user) return
 
-  const handleDeleteDraft = async (draftId: string) => {
-    // Find draft for confirmation
-    const draft = firebaseDrafts.find(d => d.id === draftId)
-    const draftName = draft?.creativeFilename || 'this draft'
-    
-    // Confirm deletion
-    if (!confirm(`Are you sure you want to delete "${draftName}"? This action cannot be undone.`)) {
-      return
-    }
-    
-    if (!isOnline) {
-      toast.error('Cannot delete draft - you are offline')
-      return
-    }
-    
-    setIsDeleting(draftId)
-    try {
-      const success = await deleteFirebaseDraft(draftId)
-      if (success) {
-        toast.success('Draft deleted successfully')
-      } else {
-        toast.error('Failed to delete draft')
-      }
-    } catch (error) {
-      console.error('Failed to delete draft:', error)
-      toast.error('An error occurred while deleting the draft')
-    } finally {
-      setIsDeleting(null)
-    }
-  }
+    const q = query(
+      collection(db, 'creatives'),
+      orderBy('lastSaved', 'desc')
+    )
 
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString)
-      return date.toLocaleDateString() + ' at ' + date.toLocaleTimeString([], { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: true 
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const draftsData: Creative[] = []
+      snapshot.forEach((doc) => {
+        const data = doc.data()
+        // Only include drafts (filter in memory)
+        if (data.status === 'draft' || !data.status) {
+          draftsData.push({
+            id: doc.id,
+            ...data.formData,
+            imageUrl: data.imageUrl,
+            status: data.status || 'draft',
+            createdAt: data.createdAt,
+            lastSaved: data.lastSaved
+          } as Creative)
+        }
       })
-    } catch {
-      return 'Unknown date'
+      setCreatives(draftsData)
+      setFilteredCreatives(draftsData)
+      setLoading(false)
+    }, (error) => {
+      console.error('Error fetching drafts:', error)
+      toast.error('Failed to load drafts')
+      setLoading(false)
+    })
+
+    return () => unsubscribe()
+  }, [user])
+
+  // Get unique values for filters
+  const uniqueLitigations = useMemo(() => {
+    return Array.from(new Set(creatives.map(c => c.litigationName).filter(Boolean)))
+  }, [creatives])
+
+  const uniqueCampaigns = useMemo(() => {
+    return Array.from(new Set(creatives.map(c => c.campaignType).filter(Boolean)))
+  }, [creatives])
+
+  const uniqueDesigners = useMemo(() => {
+    return Array.from(new Set(creatives.map(c => c.designer).filter(Boolean)))
+  }, [creatives])
+
+  // Apply filters and search
+  useEffect(() => {
+    let filtered = [...creatives]
+
+    // Search filter
+    if (searchQuery) {
+      filtered = filtered.filter(c => 
+        c.creativeFilename?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.litigationName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.campaignType?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.headlineText?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    }
+
+    // Litigation filter
+    if (filterLitigation !== 'all') {
+      filtered = filtered.filter(c => c.litigationName === filterLitigation)
+    }
+
+    // Campaign filter
+    if (filterCampaign !== 'all') {
+      filtered = filtered.filter(c => c.campaignType === filterCampaign)
+    }
+
+    // Designer filter
+    if (filterDesigner !== 'all') {
+      filtered = filtered.filter(c => c.designer === filterDesigner)
+    }
+
+    // No status filter needed - all items here are drafts
+
+    // Sort
+    filtered.sort((a, b) => {
+      const aVal = a[sortField] || ''
+      const bVal = b[sortField] || ''
+      
+      if (sortDirection === 'asc') {
+        return aVal > bVal ? 1 : -1
+      } else {
+        return aVal < bVal ? 1 : -1
+      }
+    })
+
+    setFilteredCreatives(filtered)
+  }, [creatives, searchQuery, filterLitigation, filterCampaign, filterDesigner, sortField, sortDirection])
+
+  // Handle selection
+  const handleSelectCreative = (id: string) => {
+    const newSelected = new Set(selectedCreatives)
+    if (newSelected.has(id)) {
+      newSelected.delete(id)
+    } else {
+      newSelected.add(id)
+    }
+    setSelectedCreatives(newSelected)
+  }
+
+  const handleSelectAll = () => {
+    if (selectedCreatives.size === filteredCreatives.length) {
+      setSelectedCreatives(new Set())
+    } else {
+      setSelectedCreatives(new Set(filteredCreatives.map(c => c.id)))
     }
   }
 
-  const getContinueUrl = (draft: FirebaseDraftData) => {
-    // Use Firebase document ID for more reliable draft loading
-    const params = new URLSearchParams()
-    params.set('resumeId', draft.id || draft.draftId)
-    return `/upload/single?${params.toString()}`
+  // Handle actions
+  const handleStrategySync = () => {
+    if (selectedCreatives.size < 3) {
+      toast.error('Please select at least 3 creatives for Strategy Sync')
+      return
+    }
+    
+    // Pass selected IDs to Strategy Sync page
+    const ids = Array.from(selectedCreatives).join(',')
+    router.push(`/strategy-sync?creatives=${ids}`)
   }
 
-  if (draftsLoading) {
+  const handleDeleteCreative = async (id: string) => {
+    if (confirm('Are you sure you want to delete this creative?')) {
+      try {
+        await deleteDoc(doc(db, 'creatives', id))
+        toast.success('Creative deleted successfully')
+      } catch (error) {
+        console.error('Error deleting creative:', error)
+        toast.error('Failed to delete creative')
+      }
+    }
+  }
+
+  const handleSort = (field: keyof Creative) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('asc')
+    }
+  }
+
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchQuery('')
+    setFilterLitigation('all')
+    setFilterCampaign('all')
+    setFilterDesigner('all')
+  }
+
+  const activeFilterCount = [
+    filterLitigation !== 'all',
+    filterCampaign !== 'all',
+    filterDesigner !== 'all',
+    searchQuery !== ''
+  ].filter(Boolean).length
+
+  if (loading) {
     return (
-      <PageContainer>
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading drafts...</p>
-          </div>
+      <div className="container mx-auto p-6">
+        <div className="space-y-4">
+          <Skeleton className="h-12 w-64" />
+          <Skeleton className="h-96 w-full" />
         </div>
-      </PageContainer>
+      </div>
     )
   }
 
   return (
-    <PageContainer>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <PageHeader 
-            title="Saved Drafts"
-            description="Continue working on your saved creative uploads"
-          />
-        </div>
-        <div className="flex items-center gap-4">
-          {/* Connection Status */}
-          <div className={`px-3 py-1.5 rounded-full flex items-center gap-2 text-sm ${
-            isOnline ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-          }`}>
-            {isOnline ? <Cloud className="h-4 w-4" /> : <CloudOff className="h-4 w-4" />}
-            {isOnline ? 'Connected' : 'Offline'}
-          </div>
-          
-          {/* Tracking Stats */}
-          {trackingStats.totalDrafts > 0 && (
-            <div className="bg-blue-50 px-3 py-1.5 rounded-full">
-              <span className="text-sm text-blue-700">
-                {trackingStats.totalDrafts} drafts • {trackingStats.aiPopulatedCount} AI-generated
-              </span>
-            </div>
-          )}
-          
-          {/* Refresh Button */}
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={refreshDrafts}
-            disabled={!isOnline || draftsLoading}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${draftsLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        </div>
+    <div className="container mx-auto p-6 max-w-7xl">
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold">Draft Creatives</h1>
+        <p className="text-gray-600 mt-2">
+          {creatives.length} total drafts • {filteredCreatives.length} showing
+          {selectedCreatives.size > 0 && ` • ${selectedCreatives.size} selected`}
+        </p>
       </div>
 
-      {error && (
-        <Card className="mb-6 border-red-200 bg-red-50">
-          <CardContent className="py-4">
-            <div className="flex items-center gap-2 text-red-700">
-              <CloudOff className="h-4 w-4" />
-              <span className="text-sm">Error loading drafts: {error}</span>
+      {/* Search and Filters Bar */}
+      <div className="mb-6 space-y-4">
+        <div className="flex gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Search creatives..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          
+          <Button
+            variant="outline"
+            onClick={() => setShowFilters(!showFilters)}
+            className="relative"
+          >
+            <Filter className="mr-2 h-4 w-4" />
+            Filters
+            {activeFilterCount > 0 && (
+              <Badge className="ml-2" variant="secondary">
+                {activeFilterCount}
+              </Badge>
+            )}
+          </Button>
+
+          <div className="flex gap-2 border-l pl-4">
+            <Button
+              variant={viewMode === 'table' ? 'default' : 'outline'}
+              size="icon"
+              onClick={() => setViewMode('table')}
+            >
+              <TableIcon className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'grid' ? 'default' : 'outline'}
+              size="icon"
+              onClick={() => setViewMode('grid')}
+            >
+              <Grid3X3 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Filter Panel */}
+        {showFilters && (
+          <Card className="p-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <Label className="text-xs">Litigation</Label>
+                <Select value={filterLitigation} onValueChange={setFilterLitigation}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Litigations</SelectItem>
+                    {uniqueLitigations.map(lit => (
+                      <SelectItem key={lit} value={lit}>{lit}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs">Campaign Type</Label>
+                <Select value={filterCampaign} onValueChange={setFilterCampaign}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Campaigns</SelectItem>
+                    {uniqueCampaigns.map(camp => (
+                      <SelectItem key={camp} value={camp}>{camp}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs">Designer</Label>
+                <Select value={filterDesigner} onValueChange={setFilterDesigner}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Designers</SelectItem>
+                    {uniqueDesigners.map(designer => (
+                      <SelectItem key={designer} value={designer}>{designer}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-end">
+                <Button 
+                  variant="outline" 
+                  onClick={clearFilters}
+                  className="w-full"
+                >
+                  Clear All
+                </Button>
+              </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </Card>
+        )}
+      </div>
 
-      {firebaseDrafts.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">No saved drafts yet.</h2>
-            <p className="text-gray-600 mb-6">
-              Start creating a new creative upload to see your drafts here.
-            </p>
-            <Link href="/upload/single">
-              <Button>Create New Upload</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-6">
-          {firebaseDrafts.map((draft) => (
-            <Card key={draft.id || draft.draftId} className="hover:shadow-md transition-shadow">
-              <CardHeader className="pb-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-xl mb-2 flex items-center gap-2">
-                      {draft.creativeFilename || 'Untitled Draft'}
-                      {draft.autoSaved && (
-                        <Badge variant="secondary" className="text-xs">Auto-saved</Badge>
-                      )}
-                    </CardTitle>
-                    <div className="flex items-center gap-4 text-sm text-gray-600">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        Last saved: {formatDate(
-                          draft.lastSaved?.toDate?.()?.toISOString() || 
-                          (typeof draft.lastSaved === 'string' ? draft.lastSaved : new Date().toISOString())
-                        )}
-                      </div>
-                      {draft.formData?.designer && (
-                        <div className="flex items-center gap-1">
-                          <User className="w-4 h-4" />
-                          {draft.formData.designer}
-                        </div>
-                      )}
-                      {isOnline && (
-                        <div className="flex items-center gap-1">
-                          <Cloud className="w-3 h-3 text-green-600" />
-                          <span className="text-green-600 text-xs">Synced</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <Badge variant="outline" className="text-xs">
-                      ID: {(draft.id || draft.draftId).split('_').pop()}
-                    </Badge>
-                    {draft.version && (
-                      <Badge variant="secondary" className="text-xs">
-                        v{draft.version}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-              
-              <CardContent className="pt-0">
-                {/* Image thumbnail and AI tags */}
-                <div className="flex items-start gap-4 mb-6">
-                  {/* Image thumbnail */}
-                  {(draft.imageUrl || draft.formData?.uploadedImage) && (
-                    <div className="flex-shrink-0">
-                      <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
-                        {draft.imageUrl ? (
-                          <NextImage 
-                            src={draft.imageUrl} 
-                            alt={draft.creativeFilename || 'Draft image'}
-                            className="w-full h-full object-cover"
-                            width={80}
-                            height={80}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-400">
-                            <Image className="w-8 h-8" alt="" />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* AI tags */}
-                  {draft.aiPopulatedFields && draft.aiPopulatedFields.length > 0 && (
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-700 mb-2">AI Generated Fields:</p>
-                      <div className="flex flex-wrap gap-1">
-                        {draft.aiPopulatedFields.slice(0, 5).map((fieldName, index) => (
-                          <div key={index} className="flex items-center gap-1">
-                            <span className="text-xs text-gray-600 px-2 py-1 bg-purple-100 rounded">
-                              {fieldName}
-                            </span>
-                            <Badge variant="secondary" className="text-xs px-1 py-0 bg-gradient-to-r from-purple-500 to-blue-500 text-white">
-                              AI
-                            </Badge>
-                          </div>
-                        ))}
-                        {draft.aiPopulatedFields.length > 5 && (
-                          <span className="text-xs text-purple-600">
-                            +{draft.aiPopulatedFields.length - 5} more AI fields
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Draft details */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 mb-1">Campaign Name</p>
-                    <p className="text-sm text-gray-600">
-                      {draft.formData?.campaignName || 'Not specified'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 mb-1">Start Date</p>
-                    <p className="text-sm text-gray-600">
-                      {draft.formData?.startDate || 'Not specified'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 mb-1">End Date</p>
-                    <p className="text-sm text-gray-600">
-                      {draft.formData?.endDate || 'Not specified'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Action buttons */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Link href={getContinueUrl(draft)}>
-                      <Button 
-                        className="flex items-center gap-2"
-                        disabled={!isOnline}
-                      >
-                        <Play className="w-4 h-4" />
-                        Continue
-                      </Button>
-                    </Link>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDeleteDraft(draft.id || draft.draftId)}
-                      disabled={!isOnline || isDeleting === (draft.id || draft.draftId)}
-                      className="flex items-center gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      {isDeleting === (draft.id || draft.draftId) ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-4 h-4" />
-                      )}
-                      {isDeleting === (draft.id || draft.draftId) ? 'Deleting...' : 'Delete'}
-                    </Button>
-                  </div>
-                  
-                  <div className="text-xs text-gray-500">
-                    Created: {formatDate(
-                      draft.createdAt?.toDate?.()?.toISOString() || 
-                      (typeof draft.createdAt === 'string' ? draft.createdAt : new Date().toISOString())
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+      {/* Selection Bar */}
+      {selectedCreatives.size > 0 && (
+        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Badge variant="secondary" className="text-sm">
+              {selectedCreatives.size} creatives selected
+            </Badge>
+            <Button
+              variant="link"
+              size="sm"
+              onClick={() => setSelectedCreatives(new Set())}
+            >
+              Clear selection
+            </Button>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleStrategySync}
+              disabled={selectedCreatives.size < 3}
+            >
+              Analyze in Strategy Sync
+              {selectedCreatives.size < 3 && ' (need 3+)'}
+            </Button>
+          </div>
         </div>
       )}
-    </PageContainer>
+
+      {/* Content Area */}
+      <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'table' | 'grid')}>
+        {/* Table View */}
+        <TabsContent value="table">
+          {filteredCreatives.length === 0 ? (
+            <Card className="p-12 text-center">
+              <ImageIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">No drafts found</h2>
+              <p className="text-gray-600">
+                {creatives.length === 0 
+                  ? 'Start creating a new draft by uploading a creative.'
+                  : 'Try adjusting your filters or search query.'}
+              </p>
+            </Card>
+          ) : (
+            <Card>
+              <ScrollArea className="w-full">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox
+                          checked={selectedCreatives.size === filteredCreatives.length && filteredCreatives.length > 0}
+                          onCheckedChange={handleSelectAll}
+                        />
+                      </TableHead>
+                      <TableHead className="w-20">Image</TableHead>
+                      <TableHead 
+                        className="cursor-pointer"
+                        onClick={() => handleSort('creativeFilename')}
+                      >
+                        <div className="flex items-center">
+                          Filename
+                          <ArrowUpDown className="ml-2 h-4 w-4" />
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer"
+                        onClick={() => handleSort('litigationName')}
+                      >
+                        <div className="flex items-center">
+                          Litigation
+                          <ArrowUpDown className="ml-2 h-4 w-4" />
+                        </div>
+                      </TableHead>
+                      <TableHead>Campaign</TableHead>
+                      <TableHead>Designer</TableHead>
+                      <TableHead>Start Date</TableHead>
+                      <TableHead>Cost/Click</TableHead>
+                      <TableHead>Cost/Lead</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredCreatives.map((creative) => (
+                      <TableRow key={creative.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedCreatives.has(creative.id)}
+                            onCheckedChange={() => handleSelectCreative(creative.id)}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {creative.imageUrl ? (
+                            <div className="relative w-16 h-16 bg-gray-100 rounded overflow-hidden">
+                              <NextImage
+                                src={creative.imageUrl}
+                                alt={creative.creativeFilename || 'Creative'}
+                                fill
+                                className="object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-16 h-16 bg-gray-100 rounded flex items-center justify-center">
+                              <ImageIcon className="h-6 w-6 text-gray-400" />
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {creative.creativeFilename || 'Untitled'}
+                        </TableCell>
+                        <TableCell>{creative.litigationName || '-'}</TableCell>
+                        <TableCell>{creative.campaignType || '-'}</TableCell>
+                        <TableCell>{creative.designer || '-'}</TableCell>
+                        <TableCell>{creative.startDate || '-'}</TableCell>
+                        <TableCell>${creative.costPerClick || '0'}</TableCell>
+                        <TableCell>${creative.costPerWebsiteLead || '0'}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            {creative.markedAsTopAd && (
+                              <Badge variant="default" className="text-xs">Top Ad</Badge>
+                            )}
+                            <Badge variant="secondary" className="text-xs">Draft</Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => setSelectedCreativeForView(creative)}>
+                                <Eye className="mr-2 h-4 w-4" />
+                                View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => router.push(`/upload/single?resumeId=${creative.id}`)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Continue Editing
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleDeleteCreative(creative.id)}
+                                className="text-red-600"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Grid View */}
+        <TabsContent value="grid">
+          {filteredCreatives.length === 0 ? (
+            <Card className="p-12 text-center">
+              <ImageIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">No drafts found</h2>
+              <p className="text-gray-600">
+                {creatives.length === 0 
+                  ? 'Start creating a new draft by uploading a creative.'
+                  : 'Try adjusting your filters or search query.'}
+              </p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {filteredCreatives.map((creative) => (
+                <Card 
+                  key={creative.id} 
+                  className={`relative overflow-hidden cursor-pointer transition-all hover:shadow-lg ${
+                    selectedCreatives.has(creative.id) ? 'ring-2 ring-blue-500' : ''
+                  }`}
+                >
+                  {/* Selection Checkbox */}
+                  <div className="absolute top-2 left-2 z-10">
+                    <Checkbox
+                      checked={selectedCreatives.has(creative.id)}
+                      onCheckedChange={() => handleSelectCreative(creative.id)}
+                      className="bg-white shadow-sm"
+                    />
+                  </div>
+
+                  {/* Top Ad Badge */}
+                  {creative.markedAsTopAd && (
+                    <Badge className="absolute top-2 right-2 z-10" variant="default">
+                      Top Ad
+                    </Badge>
+                  )}
+
+                  {/* Image */}
+                  <div className="relative aspect-square bg-gray-100">
+                    {creative.imageUrl ? (
+                      <NextImage
+                        src={creative.imageUrl}
+                        alt={creative.creativeFilename || 'Creative'}
+                        fill
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <ImageIcon className="h-12 w-12 text-gray-400" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Info Overlay */}
+                  <div className="p-3 space-y-2">
+                    <h3 className="font-medium text-sm truncate">
+                      {creative.creativeFilename || 'Untitled'}
+                    </h3>
+                    <div className="flex flex-wrap gap-1">
+                      {creative.litigationName && (
+                        <Badge variant="secondary" className="text-xs">
+                          {creative.litigationName}
+                        </Badge>
+                      )}
+                      {creative.campaignType && (
+                        <Badge variant="outline" className="text-xs">
+                          {creative.campaignType}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-600">
+                      <span>CPC: ${creative.costPerClick || '0'}</span>
+                      <span>CPL: ${creative.costPerWebsiteLead || '0'}</span>
+                    </div>
+                  </div>
+
+                  {/* Hover Actions */}
+                  <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-70 transition-all flex items-center justify-center opacity-0 hover:opacity-100">
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedCreativeForView(creative)
+                        }}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          router.push(`/upload/single?resumeId=${creative.id}`)
+                        }}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* Creative Preview Modal */}
+      {selectedCreativeForView && (
+        <CreativePreviewModal
+          open={!!selectedCreativeForView}
+          onOpenChange={(open) => !open && setSelectedCreativeForView(null)}
+          creativeData={selectedCreativeForView}
+          mode="view"
+        />
+      )}
+    </div>
   )
 }

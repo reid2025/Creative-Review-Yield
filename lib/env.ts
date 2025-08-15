@@ -16,5 +16,10 @@ export const env = {
     messagingSenderId: '1098754850633',
     appId: '1:1098754850633:web:211a057fd8759338816498',
     measurementId: 'G-1HEL176862'
+  },
+  
+  // Vertex AI Configuration
+  vertexAI: {
+    enabled: true, // Enable Vertex AI features
   }
 }

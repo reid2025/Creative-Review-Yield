@@ -183,7 +183,7 @@ export class FirebaseDraftService {
   }
 
   /**
-   * Get all active drafts for a user
+   * Get all active drafts for a user (only draft status)
    */
   static async getAllDrafts(userId: string = 'anonymous'): Promise<FirebaseDraftData[]> {
     try {
@@ -191,17 +191,22 @@ export class FirebaseDraftService {
       const q = query(
         collection(db, this.COLLECTION_NAME),
         where('userId', '==', userId),
-        where('isActive', '==', true)
+        where('isActive', '==', true),
+        where('status', '==', 'draft')
       )
       
       const querySnapshot = await getDocs(q)
       const drafts: FirebaseDraftData[] = []
       
       querySnapshot.forEach((doc) => {
-        drafts.push({
-          id: doc.id,
-          ...doc.data()
-        } as FirebaseDraftData)
+        const data = doc.data()
+        // Only include documents with draft status or no status (legacy drafts)
+        if (data.status === 'draft' || !data.status) {
+          drafts.push({
+            id: doc.id,
+            ...data
+          } as FirebaseDraftData)
+        }
       })
       
       // Sort by lastSaved in memory to avoid needing a composite index
