@@ -13,6 +13,11 @@ export const sidebarNavItems: SidebarNavItem[] = [
     href: "/",
   },
   {
+    label: "Google Sheets Records",
+    icon: "002-plus.png",
+    href: "/google-sheets-records",
+  },
+  {
     label: "Upload Creatives",
     icon: "002-plus.png",
     href: "/upload",
@@ -22,6 +27,7 @@ export const sidebarNavItems: SidebarNavItem[] = [
     icon: "003-shine.png",
     href: "/creatives",
   },
+
   {
     label: "Strategy Sync",
     icon: "004-brain.png",

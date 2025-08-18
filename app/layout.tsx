@@ -7,8 +7,10 @@ import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
 // import { StagewiseToolbar } from "@stagewise/toolbar-next"
 import { Toaster } from "@/components/ui/toaster"
-import { AuthProvider } from "@/contexts/AuthContext"
+import { Toaster as Sonner } from "sonner"
+import { GoogleAuthProvider } from "@/contexts/GoogleAuthContext"
 import { LayoutWrapper } from "@/components/LayoutWrapper"
+import QueryProvider from "@/providers/query-provider"
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -33,13 +35,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
-        <AuthProvider>
-          <LayoutWrapper>
-            {children}
-          </LayoutWrapper>
-        </AuthProvider>
+        <GoogleAuthProvider>
+          <QueryProvider>
+            <LayoutWrapper>
+              {children}
+            </LayoutWrapper>
+          </QueryProvider>
+        </GoogleAuthProvider>
         {/* <StagewiseToolbar /> */}
         <Toaster />
+        <Sonner />
       </body>
     </html>
   )

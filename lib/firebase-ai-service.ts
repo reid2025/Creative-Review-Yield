@@ -773,6 +773,253 @@ Return ONLY the JSON object, no additional text or explanation.`
   }
 
   /**
+   * Analyze Google Sheets data and provide AI suggestions
+   */
+  async analyzeGoogleSheetsData(data: {
+    imageUrl: string
+    accountName?: string
+    campaignName?: string
+    litigationName?: string
+    performanceHistory?: any[]
+  }): Promise<CreativeAnalysisResult> {
+    console.log('═══════════════════════════════════════════════')
+    console.log('🚀 GOOGLE SHEETS IMAGE ANALYSIS STARTING')
+    console.log('═══════════════════════════════════════════════')
+    console.log('📊 Input Data:')
+    console.log('   Image URL:', data.imageUrl)
+    console.log('   Account:', data.accountName)
+    console.log('   Campaign:', data.campaignName)
+    console.log('═══════════════════════════════════════════════')
+    
+    try {
+      // Load available tags if not already loaded
+      await this.loadAvailableTags()
+
+      // Check if we have an image URL to analyze
+      if (!data.imageUrl) {
+        throw new Error('No image URL provided from Google Sheets')
+      }
+
+      // Check if AI model is available
+      if (!model) {
+        console.error('❌ AI model not initialized, returning default analysis')
+        // Return basic analysis based on campaign data only
+        return this.getDefaultAnalysis(data)
+      }
+
+      console.log('🔄 Fetching image from URL:', data.imageUrl)
+      
+      try {
+        // Fetch the image from the URL
+        const response = await fetch(data.imageUrl)
+        if (!response.ok) {
+          throw new Error(`Failed to fetch image: ${response.statusText}`)
+        }
+        
+        const blob = await response.blob()
+        console.log('✅ Image fetched successfully')
+        console.log('   Size:', (blob.size / 1024).toFixed(2), 'KB')
+        console.log('   Type:', blob.type)
+        
+        // Convert blob to base64 for Gemini
+        const arrayBuffer = await blob.arrayBuffer()
+        const base64 = btoa(
+          new Uint8Array(arrayBuffer)
+            .reduce((data, byte) => data + String.fromCharCode(byte), '')
+        )
+        
+        console.log('🤖 Analyzing image with Gemini AI...')
+        
+        // Build the prompt for analysis
+        const prompt = await this.buildGoogleSheetsPrompt(data)
+        
+        // Generate content using Gemini
+        const result = await model.generateContent([
+          prompt,
+          {
+            inlineData: {
+              mimeType: blob.type || 'image/jpeg',
+              data: base64
+            }
+          }
+        ])
+        
+        const response_text = result.response.text()
+        console.log('✅ AI analysis complete')
+        console.log('📄 Response preview:', response_text.substring(0, 200))
+        
+        // Parse the AI response using the same logic as analyzeCreativeImage
+        let analysis: CreativeAnalysisResult
+        try {
+          // Extract JSON from the response (in case there's extra text)
+          const jsonMatch = response_text.match(/\{[\s\S]*\}/)
+          if (!jsonMatch) {
+            throw new Error('No JSON found in response')
+          }
+          
+          const rawAnalysis = JSON.parse(jsonMatch[0])
+          
+          // Log what AI found in the image
+          console.log('👁️ ========== AI IMAGE ANALYSIS ==========')
+          console.log('📷 What AI sees in the Facebook image:')
+          if (rawAnalysis.extractedText) {
+            console.log('📝 Text found in image:')
+            console.log('   Pre-headline:', rawAnalysis.extractedText?.preheadlineText || 'None')
+            console.log('   Headline:', rawAnalysis.extractedText?.headlineText || 'None')
+            console.log('   CTA:', rawAnalysis.extractedText?.ctaLabel || 'None')
+            console.log('   Body Copy:', rawAnalysis.extractedText?.bodyCopySummary || 'None')
+          }
+          console.log('🎨 Visual Elements:')
+          console.log('   Imagery Type:', rawAnalysis.imageryType?.reasoning || 'Not detected')
+          console.log('   Background:', rawAnalysis.imageryBackground?.reasoning || 'Not detected')
+          console.log('   Layout:', rawAnalysis.creativeLayoutType?.reasoning || 'Not detected')
+          console.log('=========================================\n')
+          
+          // Convert to our format
+          analysis = {
+            designer: rawAnalysis.designer?.selectedOption || rawAnalysis.designer?.suggestedNewOption || null,
+            litigationName: data.litigationName || rawAnalysis.litigationName?.selectedOption || rawAnalysis.litigationName?.suggestedNewOption || null,
+            campaignType: rawAnalysis.campaignType?.selectedOption || rawAnalysis.campaignType?.suggestedNewOption || 'social-media',
+            creativeLayoutType: rawAnalysis.creativeLayoutType?.selectedOption || rawAnalysis.creativeLayoutType?.suggestedNewOption || null,
+            messagingStructure: rawAnalysis.messagingStructure?.selectedOption || rawAnalysis.messagingStructure?.suggestedNewOption || null,
+            imageryType: rawAnalysis.imageryType?.selectedOptions || rawAnalysis.imageryType?.suggestedNewOptions || [],
+            imageryBackground: rawAnalysis.imageryBackground?.selectedOptions || rawAnalysis.imageryBackground?.suggestedNewOptions || [],
+            preheadlineText: rawAnalysis.extractedText?.preheadlineText || null,
+            headlineText: rawAnalysis.extractedText?.headlineText || null,
+            headlineTags: rawAnalysis.headlineTags?.selectedOptions || rawAnalysis.headlineTags?.suggestedNewOptions || [],
+            headlineIntent: rawAnalysis.headlineIntent?.selectedOptions || rawAnalysis.headlineIntent?.suggestedNewOptions || [],
+            ctaLabel: rawAnalysis.extractedText?.ctaLabel || null,
+            ctaVerb: rawAnalysis.ctaVerb?.selectedOption || rawAnalysis.ctaVerb?.suggestedNewOption || null,
+            ctaStyleGroup: rawAnalysis.ctaStyleGroup?.selectedOption || rawAnalysis.ctaStyleGroup?.suggestedNewOption || null,
+            ctaColor: rawAnalysis.ctaColor?.selectedOption || rawAnalysis.ctaColor?.suggestedNewOption || null,
+            ctaPosition: rawAnalysis.ctaPosition?.selectedOption || rawAnalysis.ctaPosition?.suggestedNewOption || null,
+            bodyCopySummary: rawAnalysis.extractedText?.bodyCopySummary || `Campaign for ${data.campaignName || 'general audience'}`,
+            copyAngle: rawAnalysis.copyAngle?.selectedOptions || rawAnalysis.copyAngle?.suggestedNewOptions || [],
+            copyTone: rawAnalysis.copyTone?.selectedOptions || rawAnalysis.copyTone?.suggestedNewOptions || [],
+            audiencePersona: rawAnalysis.audiencePersona?.selectedOption || rawAnalysis.audiencePersona?.suggestedNewOption || null,
+            campaignTrigger: rawAnalysis.campaignTrigger?.selectedOption || rawAnalysis.campaignTrigger?.suggestedNewOption || null,
+            
+            // Boolean fields
+            questionBasedHeadline: rawAnalysis.booleanFields?.questionBasedHeadline || false,
+            clientBranding: rawAnalysis.booleanFields?.clientBranding || false,
+            iconsUsed: rawAnalysis.booleanFields?.iconsUsed || false,
+            legalLanguage: rawAnalysis.booleanFields?.legalLanguage || false,
+            emotionalStatement: rawAnalysis.booleanFields?.emotionalStatement || false,
+            dollarAmount: rawAnalysis.booleanFields?.dollarAmount || false,
+            statMentioned: rawAnalysis.booleanFields?.statMentioned || false,
+            disclaimer: rawAnalysis.booleanFields?.disclaimer || false,
+            conditionsListed: rawAnalysis.booleanFields?.conditionsListed || false,
+            
+            // AI metadata
+            confidence: rawAnalysis.overallAnalysis?.confidence || 0.85,
+            suggestedReview: rawAnalysis.overallAnalysis?.suggestedReview || []
+          }
+          
+          console.log('✅ Analysis complete with real AI data from Facebook image')
+          return analysis
+          
+        } catch (parseError) {
+          console.error('Failed to parse AI response:', parseError)
+          console.log('Falling back to default analysis')
+          return this.getDefaultAnalysis(data)
+        }
+        
+      } catch (fetchError) {
+        console.error('⚠️ Failed to fetch/analyze image:', fetchError)
+        console.log('   Falling back to campaign-based analysis')
+        
+        // If image fetch fails, return analysis based on campaign data
+        return this.getDefaultAnalysis(data)
+      }
+      
+    } catch (error) {
+      console.error('❌ Failed to analyze Google Sheets data:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get default analysis when AI is not available or image fetch fails
+   */
+  private getDefaultAnalysis(data: {
+    campaignName?: string
+    litigationName?: string
+  }): CreativeAnalysisResult {
+    return {
+      // Metadata from Google Sheets
+      litigationName: data.litigationName || data.campaignName?.split('/')[0]?.trim() || '',
+      campaignType: 'social-media',
+      
+      // Default values
+      creativeLayoutType: 'standard',
+      messagingStructure: 'headline-body-cta',
+      imageryType: ['photo', 'graphic'],
+      imageryBackground: ['solid-color'],
+      
+      // Generic headlines
+      headlineText: 'LEARN MORE ABOUT YOUR OPTIONS',
+      preheadlineText: 'IMPORTANT INFORMATION',
+      headlineTags: ['urgent', 'informative'],
+      headlineIntent: ['awareness', 'education'],
+      ctaLabel: 'LEARN MORE',
+      ctaVerb: 'learn',
+      ctaStyleGroup: 'button',
+      ctaPosition: 'bottom',
+      ctaColor: 'blue',
+      
+      // Copy elements
+      bodyCopySummary: `Campaign for ${data.campaignName || 'general audience'}`,
+      copyAngle: ['informative', 'helpful'],
+      copyTone: ['professional', 'friendly'],
+      audiencePersona: 'general',
+      campaignTrigger: 'awareness',
+      
+      // Booleans
+      questionBasedHeadline: false,
+      clientBranding: true,
+      iconsUsed: false,
+      legalLanguage: false,
+      emotionalStatement: false,
+      dollarAmount: false,
+      statMentioned: false,
+      disclaimer: false,
+      conditionsListed: false,
+      
+      // AI metadata
+      confidence: 0.3,
+      suggestedReview: ['Manual review required - AI analysis unavailable']
+    }
+  }
+
+  /**
+   * Build analysis prompt for Google Sheets images
+   */
+  private async buildGoogleSheetsPrompt(data: {
+    accountName?: string
+    campaignName?: string
+    litigationName?: string
+  }): Promise<string> {
+    // Get the base prompt with all the field definitions
+    const basePrompt = await this.buildAnalysisPrompt()
+    
+    // Add Google Sheets specific context
+    return `${basePrompt}
+    
+    ADDITIONAL CONTEXT FROM GOOGLE SHEETS:
+    - Account: ${data.accountName || 'Unknown'}
+    - Campaign: ${data.campaignName || 'Unknown'}
+    - Litigation: ${data.litigationName || 'Unknown'}
+    
+    This is a Facebook ad creative from an existing campaign. Pay special attention to:
+    - Any text visible in the image (headlines, body copy, CTAs)
+    - Visual elements and layout structure
+    - Color scheme and branding elements
+    - Call-to-action buttons and their positioning
+    
+    Use the campaign context to better understand the litigation type and target audience.`
+  }
+
+  /**
    * Clear cached tags (useful when tags are updated)
    */
   clearTagCache() {

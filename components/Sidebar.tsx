@@ -37,7 +37,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { QuickAddModal } from "@/components/QuickAddModal"
-import { useAuth } from "@/contexts/AuthContext"
+import { useGoogleAuth } from "@/contexts/GoogleAuthContext"
 
 // ===========================
 // Internal Component Interfaces
@@ -411,23 +411,18 @@ const SidebarTools: React.FC = () => {
 const SidebarProfile: React.FC = () => {
   const { isCollapsed } = useSidebar()
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false)
-  const { user, logout } = useAuth()
+  const { user, signOut } = useGoogleAuth()
   const router = useRouter()
   
-  const handleLogout = async () => {
-    try {
-      await logout()
-      router.push('/login')
-    } catch (error) {
-      console.error('Failed to log out:', error)
-    }
+  const handleLogout = () => {
+    signOut()
   }
   
   // Get user initials for avatar
   const getUserInitials = () => {
     if (!user) return 'U'
-    if (user.displayName) {
-      const names = user.displayName.split(' ')
+    if (user.name) {
+      const names = user.name.split(' ')
       return names.map(n => n[0]).join('').toUpperCase().slice(0, 2)
     }
     if (user.email) {
@@ -436,7 +431,7 @@ const SidebarProfile: React.FC = () => {
     return 'U'
   }
   
-  const displayName = user?.displayName || 'User'
+  const displayName = user?.name || 'User'
   const displayEmail = user?.email || 'Not logged in'
 
   return (

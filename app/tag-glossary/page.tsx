@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { tagService, TAG_CATEGORIES, type Tag, type TagCategory } from '@/lib/firebase-tag-service'
-import { useAuth } from '@/contexts/AuthContext'
+import { useGoogleAuth } from '@/contexts/GoogleAuthContext'
 import { useRouter } from 'next/navigation'
 import {
   Dialog,
@@ -29,7 +29,7 @@ import {
 import { Separator } from '@/components/ui/separator'
 
 export default function TagGlossaryPage() {
-  const { user } = useAuth()
+  const { user } = useGoogleAuth()
   const router = useRouter()
   const [tags, setTags] = useState<Tag[]>([])
   const [categories, setCategories] = useState<TagCategory[]>(TAG_CATEGORIES)

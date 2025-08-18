@@ -1,14 +1,29 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+import { useGoogleAuth } from '@/contexts/GoogleAuthContext'
 import { SidebarProvider } from '@/components/SidebarProvider'
 import { Sidebar } from '@/components/Sidebar'
+import { Loader2 } from 'lucide-react'
 
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const { user, isLoading } = useGoogleAuth()
   
-  // Hide sidebar on login, register, and auth-test pages
-  const hideSidebar = pathname === '/login' || pathname === '/register' || pathname === '/auth-test'
+  // Hide sidebar on login page or when not authenticated
+  const hideSidebar = pathname === '/login' || !user
+  
+  // Show loading state while checking authentication
+  if (isLoading && pathname !== '/login') {
+    return (
+      <div className="min-h-screen bg-[#e5e5e5] flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <p className="text-gray-600">Loading application...</p>
+        </div>
+      </div>
+    )
+  }
   
   if (hideSidebar) {
     return (

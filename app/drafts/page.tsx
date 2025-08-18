@@ -13,7 +13,7 @@ import {
   Timestamp
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { useAuth } from '@/contexts/AuthContext'
+import { useGoogleAuth } from '@/contexts/GoogleAuthContext'
 import { toast } from 'sonner'
 
 // UI Components
@@ -95,7 +95,7 @@ interface Creative {
 }
 
 export default function DraftsPage() {
-  const { user } = useAuth()
+  const { user } = useGoogleAuth()
   const router = useRouter()
   
   // State

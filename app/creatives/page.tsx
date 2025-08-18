@@ -3,18 +3,20 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import NextImage from 'next/image'
+import { format } from 'date-fns'
 import { 
   collection, 
   query, 
   orderBy, 
   onSnapshot, 
   deleteDoc,
-  doc,
-  Timestamp
+  doc
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { useAuth } from '@/contexts/AuthContext'
+import { useGoogleAuth } from '@/contexts/GoogleAuthContext'
 import { toast } from 'sonner'
+import type { Creative } from '@/types/creative'
+import { PerformanceHoverCard } from '@/components/PerformanceHoverCard'
 
 // UI Components
 import { Button } from '@/components/ui/button'
@@ -63,39 +65,8 @@ import {
   ImageIcon
 } from 'lucide-react'
 
-interface Creative {
-  id: string
-  creativeFilename: string
-  imageUrl?: string
-  litigationName?: string
-  campaignType?: string
-  designer?: string
-  startDate?: string
-  endDate?: string
-  amountSpent?: string
-  costPerClick?: string
-  costPerWebsiteLead?: string
-  markedAsTopAd?: boolean
-  status?: 'draft' | 'saved'
-  createdAt?: Timestamp
-  lastSaved?: Timestamp
-  
-  // Additional fields from form
-  creativeLayoutType?: string
-  imageryType?: string[]
-  imageryBackground?: string[]
-  messagingStructure?: string
-  headlineText?: string
-  ctaLabel?: string
-  ctaColor?: string
-  ctaPosition?: string
-  copyAngle?: string[]
-  copyTone?: string[]
-  audiencePersona?: string
-}
-
 export default function CreativesPage() {
-  const { user } = useAuth()
+  const { user } = useGoogleAuth()
   const router = useRouter()
   
   // State
@@ -136,7 +107,10 @@ export default function CreativesPage() {
             imageUrl: data.imageUrl,
             status: data.status,
             createdAt: data.createdAt,
-            lastSaved: data.lastSaved
+            lastSaved: data.lastSaved,
+            creativeHistory: data.creativeHistory,
+            syncSource: data.syncSource,
+            lastSyncedAt: data.lastSyncedAt
           } as Creative)
         }
       })
@@ -485,8 +459,16 @@ export default function CreativesPage() {
                       <TableHead>Campaign</TableHead>
                       <TableHead>Designer</TableHead>
                       <TableHead>Start Date</TableHead>
-                      <TableHead>Cost/Click</TableHead>
-                      <TableHead>Cost/Lead</TableHead>
+                      <TableHead className="text-center">
+                        <div className="flex flex-col">
+                          <span>Performance Metrics</span>
+                          <div className="flex gap-4 text-xs text-gray-500 mt-1">
+                            <span>Spend</span>
+                            <span>CPC</span>
+                            <span>CPL</span>
+                          </div>
+                        </div>
+                      </TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -523,14 +505,46 @@ export default function CreativesPage() {
                         <TableCell>{creative.campaignType || '-'}</TableCell>
                         <TableCell>{creative.designer || '-'}</TableCell>
                         <TableCell>{creative.startDate || '-'}</TableCell>
-                        <TableCell>${creative.costPerClick || '0'}</TableCell>
-                        <TableCell>${creative.costPerWebsiteLead || '0'}</TableCell>
                         <TableCell>
-                          <div className="flex gap-1">
+                          <PerformanceHoverCard history={creative.creativeHistory}>
+                            <div className="flex gap-4 items-center cursor-pointer">
+                              <div className="text-sm">
+                                <span className="text-gray-500">$</span>
+                                <span className="font-medium">{creative.creativeHistory?.[creative.creativeHistory.length - 1]?.cost || '0'}</span>
+                              </div>
+                              <div className="text-sm">
+                                <span className="text-gray-500">$</span>
+                                <span className="font-medium">{creative.creativeHistory?.[creative.creativeHistory.length - 1]?.costPerLinkClick || '0'}</span>
+                              </div>
+                              <div className="text-sm">
+                                <span className="text-gray-500">$</span>
+                                <span className="font-medium">{creative.creativeHistory?.[creative.creativeHistory.length - 1]?.costPerWebsiteLead || '0'}</span>
+                              </div>
+                              {creative.creativeHistory && creative.creativeHistory.length > 0 && (
+                                <Badge variant="outline" className="text-xs h-5 px-1">
+                                  {creative.creativeHistory.length}
+                                </Badge>
+                              )}
+                            </div>
+                          </PerformanceHoverCard>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1 flex-wrap">
                             {creative.markedAsTopAd && (
                               <Badge variant="default" className="text-xs">Top Ad</Badge>
                             )}
-                            <Badge variant="outline" className="text-xs">Saved</Badge>
+                            {creative.syncSource === 'google-sheets' ? (
+                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-300">
+                                Synced
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs">Manual</Badge>
+                            )}
+                            {creative.creativeHistory && creative.creativeHistory.length > 0 && (
+                              <Badge variant="secondary" className="text-xs">
+                                {creative.creativeHistory.length} updates
+                              </Badge>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
@@ -637,11 +651,23 @@ export default function CreativesPage() {
                           {creative.campaignType}
                         </Badge>
                       )}
+                      {creative.syncSource === 'google-sheets' && (
+                        <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-300">
+                          Synced
+                        </Badge>
+                      )}
                     </div>
-                    <div className="flex justify-between text-xs text-gray-600">
-                      <span>CPC: ${creative.costPerClick || '0'}</span>
-                      <span>CPL: ${creative.costPerWebsiteLead || '0'}</span>
-                    </div>
+                    <PerformanceHoverCard history={creative.creativeHistory}>
+                      <div className="flex justify-between text-xs text-gray-600 cursor-pointer">
+                        <span>CPC: ${creative.creativeHistory?.[creative.creativeHistory.length - 1]?.costPerLinkClick || '0'}</span>
+                        <span>CPL: ${creative.creativeHistory?.[creative.creativeHistory.length - 1]?.costPerWebsiteLead || '0'}</span>
+                      </div>
+                    </PerformanceHoverCard>
+                    {creative.lastSyncedAt && (
+                      <div className="text-xs text-gray-500">
+                        Last sync: {format(creative.lastSyncedAt.toDate(), 'MMM dd, HH:mm')}
+                      </div>
+                    )}
                   </div>
 
                   {/* Hover Actions */}

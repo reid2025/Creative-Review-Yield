@@ -18,20 +18,22 @@ import { db, storage } from './firebase'
 
 export interface FirebaseDraftData {
   id?: string
-  draftId: string
   creativeFilename: string
   lastSaved: Timestamp
   createdAt: Timestamp
-  status?: 'draft' | 'saved' // Add status field
-  autoSaved?: boolean
+  status?: 'draft' | 'saved'
   formData: Record<string, unknown>
   imageUrl?: string
-  imageStoragePath?: string
   userId?: string
-  // Additional tracking fields as per requirements
   aiPopulatedFields?: string[]
-  version: number
-  isActive: boolean
+  // Performance history
+  creativeHistory?: Array<{
+    date: string
+    cost: string
+    costPerWebsiteLead: string
+    costPerLinkClick: string
+    dataSource: 'manual' | 'google-sheets'
+  }>
 }
 
 export class FirebaseDraftService {
@@ -45,7 +47,7 @@ export class FirebaseDraftService {
     try {
       // Testing Firebase connection
       // Try to read from Firestore
-      const q = query(collection(db, this.COLLECTION_NAME), where('isActive', '==', true))
+      const q = query(collection(db, this.COLLECTION_NAME))
       await getDocs(q)
       // Firebase connection test successful
       return true
@@ -107,18 +109,23 @@ export class FirebaseDraftService {
         }
       }
       
+      // Extract performanceHistory from formData if it exists
+      // BUT don't save it as creativeHistory if it's from Google Sheets
+      const performanceHistory = cleanFormData?.performanceHistory as FirebaseDraftData['creativeHistory']
+      if (performanceHistory) {
+        delete cleanFormData.performanceHistory // Remove from formData to store separately
+      }
+      
       // Clean the entire draft data object to remove undefined values
       const draftData = this.cleanObject({
-        draftId: data.draftId || this.generateDraftId(),
         creativeFilename: data.creativeFilename || 'Untitled',
         lastSaved: serverTimestamp() as Timestamp,
-        status: data.status || 'draft', // Default to draft if not specified
-        autoSaved: data.autoSaved || false,
+        status: data.status || 'saved', // Default to saved
         formData: cleanFormData || {},
         aiPopulatedFields: data.aiPopulatedFields || [],
-        version: (data.version || 0) + 1,
-        isActive: true,
-        userId: data.userId || 'anonymous' // In production, use actual user ID
+        userId: data.userId || 'anonymous',
+        // Don't save creativeHistory - it should not be stored in Firebase
+        // creativeHistory: performanceHistory || data.creativeHistory
       })
 
       // Prepared draft data for Firebase
@@ -126,10 +133,9 @@ export class FirebaseDraftService {
       // Handle image upload if provided (skip if storage permission issues)
       if (imageFile) {
         try {
-          const imageData = await this.uploadImage(imageFile, draftData.draftId!)
+          const imageData = await this.uploadImage(imageFile, draftData.creativeFilename!)
           draftData.imageUrl = imageData.downloadUrl
-          draftData.imageStoragePath = imageData.storagePath
-          // Image uploaded successfully
+          // Image uploaded successfully - we don't need to save the storage path
         } catch (imageError) {
           console.warn('⚠️ Image upload failed, continuing without image:', imageError)
           // Don't fail the entire draft save if image upload fails
@@ -191,7 +197,6 @@ export class FirebaseDraftService {
       const q = query(
         collection(db, this.COLLECTION_NAME),
         where('userId', '==', userId),
-        where('isActive', '==', true),
         where('status', '==', 'draft')
       )
       
@@ -228,20 +233,9 @@ export class FirebaseDraftService {
     try {
       const draftRef = doc(db, this.COLLECTION_NAME, id)
       
-      // Get draft data to clean up image if needed
-      const draftSnap = await getDoc(draftRef)
-      if (draftSnap.exists()) {
-        const draftData = draftSnap.data() as FirebaseDraftData
-        
-        // Delete image from storage if exists
-        if (draftData.imageStoragePath) {
-          await this.deleteImage(draftData.imageStoragePath)
-        }
-      }
-      
-      // Soft delete by marking as inactive
+      // Simply update status to deleted
       await updateDoc(draftRef, {
-        isActive: false,
+        status: 'deleted',
         lastSaved: serverTimestamp()
       })
       
@@ -259,8 +253,7 @@ export class FirebaseDraftService {
     // Simplified query to avoid needing a composite index
     const q = query(
       collection(db, this.COLLECTION_NAME),
-      where('userId', '==', userId),
-      where('isActive', '==', true)
+      where('userId', '==', userId)
     )
 
     return onSnapshot(q, (querySnapshot) => {
@@ -357,12 +350,9 @@ export class FirebaseDraftService {
       for (const localDraft of localDrafts) {
         try {
           const firebaseDraft: Partial<FirebaseDraftData> = {
-            draftId: localDraft.draftId,
             creativeFilename: localDraft.creativeFilename,
             formData: localDraft.formData,
-            autoSaved: localDraft.autoSaved,
-            version: 1,
-            isActive: true
+            status: 'draft'
           }
           
           await this.saveDraft(firebaseDraft)
@@ -392,8 +382,8 @@ export class FirebaseDraftService {
       
       const stats = {
         totalDrafts: drafts.length,
-        autoSavedCount: drafts.filter(d => d.autoSaved).length,
-        manualSavedCount: drafts.filter(d => !d.autoSaved).length,
+        autoSavedCount: 0, // No longer tracking autoSaved
+        manualSavedCount: drafts.length,
         aiPopulatedCount: drafts.filter(d => d.aiPopulatedFields && d.aiPopulatedFields.length > 0).length
       }
       

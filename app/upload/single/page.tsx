@@ -12,14 +12,14 @@ import { useAIFields } from '@/hooks/useAIFields'
 import { useFirebaseDrafts } from '@/hooks/useFirebaseDrafts'
 import { FirebaseDraftData } from '@/lib/firebase-draft-service'
 import { firebaseAIService } from '@/lib/firebase-ai-service'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
-import { useAuth } from '@/contexts/AuthContext'
+import { useGoogleAuth } from '@/contexts/GoogleAuthContext'
 import { AIStatusIndicator } from '@/components/ai/AIStatusIndicator'
 import { useTagOptions } from '@/hooks/useTagOptions'
 import { toast } from 'sonner'
 import { useSearchParams } from 'next/navigation'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+// import { CreativeHistoryViewer } from '@/components/CreativeHistoryViewer'
 
 // shadcn/ui components
 import { Button } from '@/components/ui/button'
@@ -43,6 +43,14 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 // Form validation schema
 const formSchema = z.object({
@@ -53,15 +61,23 @@ const formSchema = z.object({
   creativeFilename: z.string().min(1, 'Filename is required'),
   dateAdded: z.string(),
   designer: z.string().min(1, 'Designer is required'),
-  startDate: z.string().min(1, 'Start date is required'),
-  endDate: z.string().min(1, 'End date is required'),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
   litigationName: z.string().min(1, 'Litigation Name is required'),
   campaignType: z.string().min(1, 'Campaign Type is required'),
   
-  // Performance Metrics
-  amountSpent: z.string().min(1, 'Amount Spent is required'),
-  costPerWebsiteLead: z.string().min(1, 'Cost Per Website Lead is required'),
-  costPerClick: z.string().min(1, 'Cost Per Click is required'),
+  // New fields from Google Sheets sync
+  accountName: z.string().optional(),
+  campaignName: z.string().optional(),
+  
+  // Performance Metrics - Now stored as history
+  performanceHistory: z.array(z.object({
+    date: z.string(),
+    cost: z.string(),
+    costPerWebsiteLead: z.string(),
+    costPerLinkClick: z.string(),
+    dataSource: z.enum(['manual', 'google-sheets'])
+  })).default([]),
   
   // Insights
   creativeLayoutType: z.string().optional(),
@@ -259,7 +275,8 @@ function SearchableSelect({
             setSearchTerm('')
           }, 200)
         }
-      } catch {
+      } catch (error) {
+        console.error('Failed to add new tag:', error)
         toast.error('Failed to add new tag')
       } finally {
         setIsAddingNew(false)
@@ -400,12 +417,13 @@ function SearchableSelect({
 }
 
 function SingleUploadContent() {
-  const { user } = useAuth()
+  const { user } = useGoogleAuth()
   const searchParams = useSearchParams()
   const editId = searchParams.get('edit')
   const resumeId = searchParams.get('resumeId')
+  const fromGoogleSheets = searchParams.get('from') === 'google-sheets'
   
-  const [showImage, setShowImage] = useState(false)
+  const [showImage, setShowImage] = useState(fromGoogleSheets)
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
@@ -416,12 +434,12 @@ function SingleUploadContent() {
   const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null)
   const [loadingExistingData, setLoadingExistingData] = useState(false)
   const [currentFirebaseDocId, setCurrentFirebaseDocId] = useState<string | null>(null)
-  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null)
   const [currentStatus, setCurrentStatus] = useState<'draft' | 'saved'>('draft')
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const [hasChanges, setHasChanges] = useState(false)
   // const [countdown, setCountdown] = useState(30) // Currently unused
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, string>>({})
+  // const [creativeHistory, setCreativeHistory] = useState<CreativeHistoryEntry[]>([]) // For performance history
   
   // Helper function to handle AI suggestion acceptance
   const acceptAiSuggestion = async (fieldName: string, addNewTag: (label: string) => Promise<string>) => {
@@ -438,7 +456,8 @@ function SingleUploadContent() {
           return rest
         })
         toast.success(`Added "${suggestion}" to ${fieldName}`)
-      } catch {
+      } catch (error) {
+        console.error('Failed to add suggestion:', error)
         toast.error('Failed to add suggestion')
       }
     }
@@ -478,18 +497,18 @@ function SingleUploadContent() {
   const { options: campaignTypeOptions, addNewTag: addCampaignTypeTag } = useTagOptions('campaignType')
   const { options: layoutTypeOptions, addNewTag: addLayoutTypeTag } = useTagOptions('creativeLayoutType')
   const { options: messagingOptions, addNewTag: addMessagingTag } = useTagOptions('messagingStructure')
-  const { options: imageryTypeOptions } = useTagOptions('imageryType')
-  const { options: imageryBgOptions } = useTagOptions('imageryBackground')
-  const { options: headlineTagOptions } = useTagOptions('headlineTags')
-  const { options: headlineIntentOptions } = useTagOptions('headlineIntent')
-  const { options: ctaVerbOptions } = useTagOptions('ctaVerb')
-  const { options: ctaStyleOptions } = useTagOptions('ctaStyleGroup')
-  const { options: ctaPositionOptions } = useTagOptions('ctaPosition')
-  const { options: ctaColorOptions } = useTagOptions('ctaColor')
-  const { options: copyAngleOptions } = useTagOptions('copyAngle')
-  const { options: copyToneOptions } = useTagOptions('copyTone')
-  const { options: personaOptions } = useTagOptions('audiencePersona')
-  const { options: triggerOptions } = useTagOptions('campaignTrigger')
+  const { options: imageryTypeOptions, addNewTag: addImageryTypeTag } = useTagOptions('imageryType')
+  const { options: imageryBgOptions, addNewTag: addImageryBgTag } = useTagOptions('imageryBackground')
+  const { options: headlineTagOptions, addNewTag: addHeadlineTag } = useTagOptions('headlineTags')
+  const { options: headlineIntentOptions, addNewTag: addHeadlineIntentTag } = useTagOptions('headlineIntent')
+  const { options: ctaVerbOptions, addNewTag: addCtaVerbTag } = useTagOptions('ctaVerb')
+  const { options: ctaStyleOptions, addNewTag: addCtaStyleTag } = useTagOptions('ctaStyleGroup')
+  const { options: ctaPositionOptions, addNewTag: addCtaPositionTag } = useTagOptions('ctaPosition')
+  const { options: ctaColorOptions, addNewTag: addCtaColorTag } = useTagOptions('ctaColor')
+  const { options: copyAngleOptions, addNewTag: addCopyAngleTag } = useTagOptions('copyAngle')
+  const { options: copyToneOptions, addNewTag: addCopyToneTag } = useTagOptions('copyTone')
+  const { options: personaOptions, addNewTag: addPersonaTag } = useTagOptions('audiencePersona')
+  const { options: triggerOptions, addNewTag: addTriggerTag } = useTagOptions('campaignTrigger')
 
   // Form initialization
   const form = useForm<FormData>({
@@ -504,9 +523,7 @@ function SingleUploadContent() {
       endDate: '',
       litigationName: '',
       campaignType: '',
-      amountSpent: '',
-      costPerWebsiteLead: '',
-      costPerClick: '',
+      performanceHistory: [],
       imageryType: [],
       imageryBackground: [],
       questionBasedHeadline: false,
@@ -552,14 +569,21 @@ function SingleUploadContent() {
     maxFiles: 1,
   })
 
-  // AI Autopopulate
+  // AI Autopopulate - Now based on Google Sheets data
   const executeAIAutopopulate = async (mode: 'empty' | 'all') => {
     setAiLoading(true)
     setAiSuggestions({}) // Clear previous suggestions
     try {
-      const uploadedImage = form.getValues('uploadedImage')
-      if (!uploadedImage || !(uploadedImage instanceof File)) {
-        toast.error('Please upload an image first')
+      // Check if we have Google Sheets data
+      if (!fromGoogleSheets) {
+        toast.error('AI Autopopulate is only available when using Google Sheets data')
+        return
+      }
+
+      // Get the image URL from Google Sheets
+      const imageUrl = imagePreviewUrl
+      if (!imageUrl) {
+        toast.error('No image URL found from Google Sheets')
         return
       }
 
@@ -567,8 +591,20 @@ function SingleUploadContent() {
         clearAllAITags()
       }
 
-      toast.info('Analyzing image with AI...', { duration: 10000 })
-      const aiAnalysis = await firebaseAIService.analyzeCreativeImage(uploadedImage)
+      toast.info('Analyzing data with AI...', { duration: 10000 })
+      
+      // Get current form data to pass to AI
+      const currentData = form.getValues()
+      
+      // Use the new Google Sheets analysis method
+      const aiAnalysis = await firebaseAIService.analyzeGoogleSheetsData({
+        imageUrl: imageUrl,
+        accountName: currentData.accountName,
+        campaignName: currentData.campaignName,
+        litigationName: currentData.litigationName,
+        performanceHistory: currentData.performanceHistory
+      })
+      
       const validatedAnalysis = firebaseAIService.validateSuggestions(aiAnalysis)
       
       const currentValues = form.getValues()
@@ -610,33 +646,38 @@ function SingleUploadContent() {
       // Always set designer to current user
       setField('designer', currentUser, true, designerOptions)
       
-      // Fill dates with defaults for form validation
-      if (!currentValues.startDate) {
-        const today = format(new Date(), 'yyyy-MM-dd')
-        form.setValue('startDate', today)
-        markFieldAsAI('startDate')
-        fieldsToUpdate.push('startDate')
-      }
-      if (!currentValues.endDate) {
-        const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd')
-        form.setValue('endDate', tomorrow)
-        markFieldAsAI('endDate')
-        fieldsToUpdate.push('endDate')
+      // Skip dates when from Google Sheets
+      if (!fromGoogleSheets) {
+        // Fill dates with defaults for form validation
+        if (!currentValues.startDate) {
+          const today = format(new Date(), 'yyyy-MM-dd')
+          form.setValue('startDate', today)
+          markFieldAsAI('startDate')
+          fieldsToUpdate.push('startDate')
+        }
+        if (!currentValues.endDate) {
+          const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd')
+          form.setValue('endDate', tomorrow)
+          markFieldAsAI('endDate')
+          fieldsToUpdate.push('endDate')
+        }
       }
       
       setField('litigationName', validatedAnalysis.litigationName, true, litigationOptions)
       setField('campaignType', validatedAnalysis.campaignType, true, campaignTypeOptions)
       
       // Fill performance metrics with defaults (AI can't detect these from image)
-      // Don't mark these as AI-filled per user request
-      if (mode === 'all' || !currentValues.amountSpent) {
-        form.setValue('amountSpent', '0')
-      }
-      if (mode === 'all' || !currentValues.costPerWebsiteLead) {
-        form.setValue('costPerWebsiteLead', '0')
-      }
-      if (mode === 'all' || !currentValues.costPerClick) {
-        form.setValue('costPerClick', '0')
+      // Add initial history entry if empty
+      const currentHistory = form.getValues('performanceHistory') || []
+      if (currentHistory.length === 0) {
+        const newEntry = {
+          date: new Date().toISOString().split('T')[0],
+          cost: '0',
+          costPerWebsiteLead: '0',
+          costPerLinkClick: '0',
+          dataSource: 'manual' as const
+        }
+        form.setValue('performanceHistory', [newEntry])
       }
       
       // Message & Targeting - Fill ALL fields
@@ -880,10 +921,8 @@ function SingleUploadContent() {
     try {
       const draftData: Partial<FirebaseDraftData> = {
         id: currentFirebaseDocId || undefined,
-        draftId: currentDraftId || undefined,
         creativeFilename: form.getValues('creativeFilename'),
         status: 'draft', // Always save as draft during auto-save
-        autoSaved: true,
         formData: form.getValues(),
         aiPopulatedFields: Array.from(aiFieldsSet)
       }
@@ -892,15 +931,12 @@ function SingleUploadContent() {
       
       if (docId) {
         setCurrentFirebaseDocId(docId)
-        if (!currentDraftId) {
-          setCurrentDraftId(draftData.draftId || `draft_${Date.now()}`)
-        }
         setCurrentStatus('draft') // Set status to draft for auto-save
         setLastSaved(new Date())
         setHasChanges(false)
       }
-    } catch {
-      console.error('Auto-save failed')
+    } catch (error) {
+      console.error('Auto-save failed:', error)
     }
   }
 
@@ -910,14 +946,19 @@ function SingleUploadContent() {
     try {
       const isEditing = !!editId
       
+      // Get form data and exclude performance history if from Google Sheets
+      const formDataToSave = { ...form.getValues() }
+      if (fromGoogleSheets) {
+        // Don't save performance history when coming from Google Sheets
+        delete formDataToSave.performanceHistory
+      }
+      
       // Save creative with 'saved' status
       const finalData: Partial<FirebaseDraftData> = {
         id: currentFirebaseDocId || undefined,
-        draftId: currentDraftId || `creative_${Date.now()}`,
         creativeFilename: data.creativeFilename || `creative-${Date.now()}`,
         status: 'saved', // Mark as saved, not draft
-        autoSaved: false,
-        formData: form.getValues(),
+        formData: formDataToSave,
         aiPopulatedFields: Array.from(aiFieldsSet)
       }
       
@@ -943,13 +984,12 @@ function SingleUploadContent() {
         setImagePreviewUrl(null)
         setUploadedImageFile(null)
       }
-      setCurrentDraftId(null)
       setCurrentFirebaseDocId(null)
       setCurrentStatus('draft') // Reset status for new form
       clearAllAITags()
       setAiSuggestions({})
-    } catch {
-      console.error('Save error')
+    } catch (error) {
+      console.error('Save error:', error)
       toast.error('Failed to save creative')
     } finally {
       setIsSubmitting(false)
@@ -959,16 +999,13 @@ function SingleUploadContent() {
   // Check form validity
   const isFormValid = () => {
     const values = form.getValues()
+    const history = values.performanceHistory || []
     return !!(
       values.creativeFilename &&
       values.designer &&
-      values.startDate &&
-      values.endDate &&
       values.litigationName &&
       values.campaignType &&
-      values.amountSpent &&
-      values.costPerWebsiteLead &&
-      values.costPerClick
+      history.length > 0 // At least one performance history entry
     )
   }
 
@@ -996,6 +1033,75 @@ function SingleUploadContent() {
     return () => subscription.unsubscribe()
   }, [form, aiFieldsSet, aiLoading, removeAITag])
 
+  // Load data from Google Sheets if coming from there
+  useEffect(() => {
+    // Load Google Sheets data when coming from Google Sheets
+    // This runs after the edit data is loaded (if editing)
+    if (fromGoogleSheets && !resumeId && !loadingExistingData) {
+      // Add a small delay if editing to ensure Firebase data loads first
+      const timeout = editId ? 500 : 0
+      
+      const timer = setTimeout(() => {
+        const googleSheetData = sessionStorage.getItem('googleSheetCreative')
+        if (googleSheetData) {
+          try {
+            const data = JSON.parse(googleSheetData)
+            
+            // Always update performance history with latest from Google Sheets
+            if (data.history) {
+              form.setValue('performanceHistory', data.history)
+            }
+            
+            // Always set the Google Sheets image URL if available
+            // This ensures we show the Facebook image from Google Sheets
+            if (data.imageUrl) {
+              setImagePreviewUrl(data.imageUrl)
+              setShowImage(true)
+            }
+            
+            // If NOT editing (new creative), set all fields
+            if (!editId) {
+              // Pre-fill form fields
+              // Set creative filename from image asset name
+              if (data.imageAssetName) {
+                form.setValue('creativeFilename', data.imageAssetName)
+              }
+              
+              // Set account name
+              if (data.accountName) {
+                form.setValue('accountName', data.accountName)
+              }
+              
+              if (data.campaignName) {
+                const litigationName = data.litigationName || data.campaignName.split('/')[0]?.trim() || ''
+                form.setValue('litigationName', litigationName)
+                form.setValue('campaignName', data.campaignName)
+              }
+              
+              // Set designer to current user's name
+              if (user?.name) {
+                form.setValue('designer', user.name)
+              }
+              
+              toast.success('Creative loaded from Google Sheets')
+            } else {
+              // If editing, update performance history and image
+              toast.info('Performance history and image updated from Google Sheets')
+            }
+            
+            // Clear the sessionStorage after loading
+            sessionStorage.removeItem('googleSheetCreative')
+          } catch (error) {
+            console.error('Error loading Google Sheets data:', error)
+            toast.error('Failed to load data from Google Sheets')
+          }
+        }
+      }, timeout)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [fromGoogleSheets, editId, resumeId, user, form, loadingExistingData])
+
   // Load data when editing an existing creative
   useEffect(() => {
     const loadExistingData = async () => {
@@ -1011,7 +1117,6 @@ function SingleUploadContent() {
         if (docSnap.exists()) {
           const data = docSnap.data()
           setCurrentFirebaseDocId(docSnap.id)
-          setCurrentDraftId(data.draftId)
           setCurrentStatus(data.status || 'draft')
           setLastSaved(data.lastSaved?.toDate() || null)
           
@@ -1039,12 +1144,18 @@ function SingleUploadContent() {
             })
           }
           
+          // Load creative history if exists
+          if (data.creativeHistory && Array.isArray(data.creativeHistory)) {
+            // Set performance history in the form
+            form.setValue('performanceHistory', data.creativeHistory)
+          }
+          
           toast.success(editId ? 'Creative loaded for editing' : 'Draft resumed successfully')
         } else {
           toast.error('Creative not found')
         }
-      } catch {
-        console.error('Error loading creative')
+      } catch (error) {
+        console.error('Error loading creative:', error)
         toast.error('Failed to load creative')
       } finally {
         setLoadingExistingData(false)
@@ -1057,7 +1168,7 @@ function SingleUploadContent() {
   // Show loading state while fetching existing data
   if (loadingExistingData) {
     return (
-      <ProtectedRoute>
+      <>
         <div className="min-h-screen bg-gray-50 p-6">
           <div className="mx-auto max-w-2xl">
             <Card>
@@ -1070,12 +1181,12 @@ function SingleUploadContent() {
             </Card>
           </div>
         </div>
-      </ProtectedRoute>
+      </>
     )
   }
 
-  // Image upload section
-  if (!showImage) {
+  // Image upload section - skip if coming from Google Sheets
+  if (!showImage && !fromGoogleSheets) {
     return (
       <div className="mx-auto py-8 max-w-4xl container">
         <Card>
@@ -1116,7 +1227,7 @@ function SingleUploadContent() {
 
   // Main form
   return (
-    <ProtectedRoute>
+    <>
       <div className="min-h-screen">
         <div className="flex">
           {/* Sidebar */}
@@ -1361,7 +1472,12 @@ function SingleUploadContent() {
                   <CardContent className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <FormFieldWrapper label="Creative Filename" required isAIFilled={aiFieldsSet.has('creativeFilename')}>
-                        <Input {...form.register('creativeFilename')} placeholder="Auto-populated from image" readOnly className="bg-gray-50 cursor-not-allowed" />
+                        <Input 
+                          {...form.register('creativeFilename')} 
+                          placeholder="Auto-populated from image" 
+                          readOnly={fromGoogleSheets}
+                          className={fromGoogleSheets ? "bg-gray-50" : "bg-gray-50 cursor-not-allowed"}
+                        />
                       </FormFieldWrapper>
                       <FormFieldWrapper label="Date Added" isAIFilled={aiFieldsSet.has('dateAdded')}>
                         <Input {...form.register('dateAdded')} type="date" readOnly className="bg-gray-50 cursor-not-allowed" />
@@ -1369,30 +1485,43 @@ function SingleUploadContent() {
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">
-                      <FormFieldWrapper label="Start Date" required isAIFilled={aiFieldsSet.has('startDate')}>
-                        <Input {...form.register('startDate')} type="date" />
+                      <FormFieldWrapper 
+                        label="Account Name" 
+                        isAIFilled={aiFieldsSet.has('accountName')}
+                      >
+                        <Input 
+                          {...form.register('accountName')} 
+                          placeholder="Account name"
+                          readOnly={fromGoogleSheets}
+                          className={fromGoogleSheets ? 'bg-gray-50' : ''}
+                        />
                       </FormFieldWrapper>
-                      <FormFieldWrapper label="End Date" required isAIFilled={aiFieldsSet.has('endDate')}>
-                        <Input {...form.register('endDate')} type="date" />
-                      </FormFieldWrapper>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
                       <FormFieldWrapper 
                         label="Designer" 
                         required 
                         isAIFilled={aiFieldsSet.has('designer')}
-                        aiSuggestion={aiSuggestions.designer}
-                        onAcceptSuggestion={() => acceptAiSuggestion('designer', addDesignerTag)}
-                        onDismissSuggestion={() => dismissAiSuggestion('designer')}
+                        aiSuggestion={!fromGoogleSheets ? aiSuggestions.designer : undefined}
+                        onAcceptSuggestion={!fromGoogleSheets ? () => acceptAiSuggestion('designer', addDesignerTag) : undefined}
+                        onDismissSuggestion={!fromGoogleSheets ? () => dismissAiSuggestion('designer') : undefined}
                       >
-                        <SearchableSelect
-                          value={form.watch('designer')}
-                          onChange={(value) => form.setValue('designer', value as string)}
-                          placeholder="Select or type to add designer"
-                          fieldName="designer"
-                        />
+                        {fromGoogleSheets ? (
+                          <Input 
+                            value={form.watch('designer')}
+                            readOnly
+                            className="bg-gray-50"
+                          />
+                        ) : (
+                          <SearchableSelect
+                            value={form.watch('designer')}
+                            onChange={(value) => form.setValue('designer', value as string)}
+                            placeholder="Select or type to add designer"
+                            fieldName="designer"
+                          />
+                        )}
                       </FormFieldWrapper>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
                       <FormFieldWrapper 
                         label="Litigation Name" 
                         required 
@@ -1408,21 +1537,29 @@ function SingleUploadContent() {
                           fieldName="litigationName"
                         />
                       </FormFieldWrapper>
+                      <FormFieldWrapper 
+                        label="Campaign Type" 
+                        required 
+                        isAIFilled={aiFieldsSet.has('campaignType')}
+                        aiSuggestion={aiSuggestions.campaignType}
+                        onAcceptSuggestion={() => acceptAiSuggestion('campaignType', addCampaignTypeTag)}
+                        onDismissSuggestion={() => dismissAiSuggestion('campaignType')}
+                      >
+                        <SearchableSelect
+                          value={form.watch('campaignType')}
+                          onChange={(value) => form.setValue('campaignType', value as string)}
+                          placeholder="Select or type to add campaign type"
+                          fieldName="campaignType"
+                        />
+                      </FormFieldWrapper>
                     </div>
 
-                    <FormFieldWrapper 
-                      label="Campaign Type" 
-                      required 
-                      isAIFilled={aiFieldsSet.has('campaignType')}
-                      aiSuggestion={aiSuggestions.campaignType}
-                      onAcceptSuggestion={() => acceptAiSuggestion('campaignType', addCampaignTypeTag)}
-                      onDismissSuggestion={() => dismissAiSuggestion('campaignType')}
-                    >
-                      <SearchableSelect
-                        value={form.watch('campaignType')}
-                        onChange={(value) => form.setValue('campaignType', value as string)}
-                        placeholder="Select or type to add campaign type"
-                        fieldName="campaignType"
+                    <FormFieldWrapper label="Campaign Name" isAIFilled={aiFieldsSet.has('campaignName')}>
+                      <Input 
+                        {...form.register('campaignName')} 
+                        placeholder="Campaign Name"
+                        readOnly={fromGoogleSheets}
+                        className={fromGoogleSheets ? 'bg-gray-50' : ''}
                       />
                     </FormFieldWrapper>
 
@@ -1456,20 +1593,159 @@ function SingleUploadContent() {
                 {/* Performance Metrics */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Performance Metrics</CardTitle>
+                    <CardTitle>Performance Metrics History</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-3 gap-4">
-                      <FormFieldWrapper label="Amount Spent" required>
-                        <Input {...form.register('amountSpent')} type="number" placeholder="0.00" />
-                      </FormFieldWrapper>
-                      <FormFieldWrapper label="Cost per Website Lead" required>
-                        <Input {...form.register('costPerWebsiteLead')} type="number" placeholder="0.00" />
-                      </FormFieldWrapper>
-                      <FormFieldWrapper label="Cost per Click" required>
-                        <Input {...form.register('costPerClick')} type="number" placeholder="0.00" />
-                      </FormFieldWrapper>
-                    </div>
+                    {/* Display as read-only table when coming from Google Sheets */}
+                    {fromGoogleSheets && form.watch('performanceHistory')?.length > 0 ? (
+                      <div className="rounded-lg border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-xs">Date</TableHead>
+                              <TableHead className="text-xs">Total Spend</TableHead>
+                              <TableHead className="text-xs">Cost Per Lead</TableHead>
+                              <TableHead className="text-xs">Cost Per Click</TableHead>
+                              <TableHead className="text-xs">Source</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {form.watch('performanceHistory')?.map((entry, index) => (
+                              <TableRow key={index}>
+                                <TableCell className="text-sm">
+                                  {new Date(entry.date).toLocaleDateString()}
+                                </TableCell>
+                                <TableCell className="text-sm">
+                                  ${parseFloat(entry.cost || '0').toFixed(2)}
+                                </TableCell>
+                                <TableCell className="text-sm">
+                                  ${parseFloat(entry.costPerWebsiteLead || '0').toFixed(2)}
+                                </TableCell>
+                                <TableCell className="text-sm">
+                                  ${parseFloat(entry.costPerLinkClick || '0').toFixed(2)}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="secondary" className="text-xs">
+                                    Google Sheets
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ) : !fromGoogleSheets ? (
+                      <>
+                        {/* Original editable form for non-Google Sheets entries */}
+                        <div className="flex items-center justify-between mb-4">
+                          <span className="text-sm text-gray-600">Add performance metrics manually</span>
+                          <Button 
+                            type="button"
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              const currentHistory = form.getValues('performanceHistory') || []
+                              const newEntry = {
+                                date: new Date().toISOString().split('T')[0],
+                                cost: '',
+                                costPerWebsiteLead: '',
+                                costPerLinkClick: '',
+                                dataSource: 'manual' as const
+                              }
+                              form.setValue('performanceHistory', [...currentHistory, newEntry])
+                            }}
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add History
+                          </Button>
+                        </div>
+                        {form.watch('performanceHistory')?.map((entry, index) => (
+                          <div key={index} className="mb-4 p-4 border rounded-lg bg-gray-50">
+                            <div className="flex items-center justify-between mb-3">
+                              <Badge variant="outline">Manual Entry</Badge>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const currentHistory = form.getValues('performanceHistory') || []
+                                  form.setValue('performanceHistory', currentHistory.filter((_, i) => i !== index))
+                                }}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            <div className="grid grid-cols-4 gap-3">
+                              <div>
+                                <Label className="text-xs">Date</Label>
+                                <Input 
+                                  type="date" 
+                                  value={entry.date}
+                                  onChange={(e) => {
+                                    const currentHistory = [...(form.getValues('performanceHistory') || [])]
+                                    currentHistory[index] = { ...currentHistory[index], date: e.target.value }
+                                    form.setValue('performanceHistory', currentHistory)
+                                  }}
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Total Spend</Label>
+                                <Input 
+                                  type="number" 
+                                  placeholder="0.00"
+                                  value={entry.cost}
+                                  onChange={(e) => {
+                                    const currentHistory = [...(form.getValues('performanceHistory') || [])]
+                                    currentHistory[index] = { ...currentHistory[index], cost: e.target.value }
+                                    form.setValue('performanceHistory', currentHistory)
+                                  }}
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Cost Per Lead</Label>
+                                <Input 
+                                  type="number" 
+                                  placeholder="0.00"
+                                  value={entry.costPerWebsiteLead}
+                                  onChange={(e) => {
+                                    const currentHistory = [...(form.getValues('performanceHistory') || [])]
+                                    currentHistory[index] = { ...currentHistory[index], costPerWebsiteLead: e.target.value }
+                                    form.setValue('performanceHistory', currentHistory)
+                                  }}
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Cost Per Click</Label>
+                                <Input 
+                                  type="number" 
+                                  placeholder="0.00"
+                                  value={entry.costPerLinkClick}
+                                  onChange={(e) => {
+                                    const currentHistory = [...(form.getValues('performanceHistory') || [])]
+                                    currentHistory[index] = { ...currentHistory[index], costPerLinkClick: e.target.value }
+                                    form.setValue('performanceHistory', currentHistory)
+                                  }}
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {(!form.watch('performanceHistory') || form.watch('performanceHistory').length === 0) && (
+                          <div className="text-center py-8 text-gray-500">
+                            <p>No performance history yet.</p>
+                            <p className="text-sm mt-1">Click &ldquo;Add History&rdquo; to track performance metrics.</p>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        <p>No performance history available from Google Sheets.</p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -1801,9 +2077,7 @@ function SingleUploadContent() {
                     endDate: '',
                     litigationName: '',
                     campaignType: '',
-                    amountSpent: '',
-                    costPerWebsiteLead: '',
-                    costPerClick: '',
+                    performanceHistory: [],
                     creativeLayoutType: '',
                     messagingStructure: '',
                     imageryType: [],
@@ -1858,7 +2132,8 @@ function SingleUploadContent() {
           creativeData={{
             ...form.getValues(),
             imageUrl: imagePreviewUrl || undefined,
-            status: currentStatus
+            status: currentStatus,
+            creativeHistory: form.getValues('performanceHistory') // Map performanceHistory to creativeHistory
           }}
           mode="preview"
           onSave={() => form.handleSubmit(handleSubmit)()}
@@ -1866,7 +2141,7 @@ function SingleUploadContent() {
           isFormValid={isFormValid()}
         />
       </div>
-    </ProtectedRoute>
+    </>
   )
 }
 

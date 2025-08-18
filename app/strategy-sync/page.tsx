@@ -13,7 +13,7 @@ import {
   serverTimestamp
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { useAuth } from '@/contexts/AuthContext'
+import { useGoogleAuth } from '@/contexts/GoogleAuthContext'
 import { toast } from 'sonner'
 
 // UI Components
@@ -115,7 +115,7 @@ interface AnalysisSection {
 }
 
 function StrategySyncContent() {
-  const { user } = useAuth()
+  const { user } = useGoogleAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   

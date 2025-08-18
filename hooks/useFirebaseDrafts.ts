@@ -18,8 +18,6 @@ export interface UseFirebaseDraftsReturn {
   refreshDrafts: () => Promise<void>
   trackingStats: {
     totalDrafts: number
-    autoSavedCount: number
-    manualSavedCount: number
     aiPopulatedCount: number
   }
   isOnline: boolean
@@ -36,8 +34,6 @@ export const useFirebaseDrafts = (options: UseFirebaseDraftsOptions = {}): UseFi
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null)
   const [trackingStats, setTrackingStats] = useState({
     totalDrafts: 0,
-    autoSavedCount: 0,
-    manualSavedCount: 0,
     aiPopulatedCount: 0
   })
   
@@ -70,8 +66,6 @@ export const useFirebaseDrafts = (options: UseFirebaseDraftsOptions = {}): UseFi
   useEffect(() => {
     const stats = {
       totalDrafts: drafts.length,
-      autoSavedCount: drafts.filter(d => d.autoSaved).length,
-      manualSavedCount: drafts.filter(d => !d.autoSaved).length,
       aiPopulatedCount: drafts.filter(d => d.aiPopulatedFields && d.aiPopulatedFields.length > 0).length
     }
     setTrackingStats(stats)
@@ -249,7 +243,7 @@ export const useFirebaseDrafts = (options: UseFirebaseDraftsOptions = {}): UseFi
 
     saveTimeoutRef.current = setTimeout(async () => {
       // Auto-save triggered
-      await saveDraft({ ...data, autoSaved: true }, imageFile)
+      await saveDraft(data, imageFile)
     }, 2000) // 2 second debounce
   }, [saveDraft])
 

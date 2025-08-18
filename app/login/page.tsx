@@ -1,128 +1,87 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect } from 'react'
+import { useGoogleAuth } from '@/contexts/GoogleAuthContext'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Loader2 } from 'lucide-react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Loader2, LogIn, Shield, FileSpreadsheet } from 'lucide-react'
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const { signIn } = useAuth()
+  const { user, isLoading, signIn, gapiInited, gisInited } = useGoogleAuth()
   const router = useRouter()
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-
-    console.log('🔐 Attempting to sign in with email:', email)
-
-    try {
-      await signIn(email, password)
-      console.log('✅ Sign in successful, redirecting to /upload/single')
-      router.push('/upload/single')
-    } catch (error: unknown) {
-      console.error('❌ Sign in error:', error)
-      
-      if (error && typeof error === 'object' && 'code' in error) {
-        if (error.code === 'auth/configuration-not-found') {
-          setError('Firebase Authentication is not configured. Please enable Email/Password authentication in Firebase Console.')
-        } else if (error.code === 'auth/user-not-found') {
-          setError('No account found with this email address')
-        } else if (error.code === 'auth/wrong-password') {
-          setError('Incorrect password')
-        } else if (error.code === 'auth/invalid-email') {
-          setError('Invalid email address')
-        } else if (error.code === 'auth/invalid-credential') {
-          setError('Invalid email or password')
-        } else {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-          setError(`Failed to sign in: ${errorMessage}`)
-        }
-      } else {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-        setError(`Failed to sign in: ${errorMessage}`)
-      }
-    } finally {
-      setLoading(false)
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (user) {
+      router.push('/')
     }
+  }, [user, router])
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <p className="text-gray-600">Initializing authentication...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-gray-50">
+      <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">Sign in</CardTitle>
+          <div className="flex items-center justify-center mb-4">
+            <div className="p-3 bg-blue-100 rounded-full">
+              <FileSpreadsheet className="h-8 w-8 text-blue-600" />
+            </div>
+          </div>
+          <CardTitle className="text-2xl font-bold text-center">
+            Creative Review Yield
+          </CardTitle>
           <CardDescription className="text-center">
-            Enter your email and password to access your account
+            Sign in with your Google account to access the application
           </CardDescription>
         </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={loading}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={loading}
-              />
-            </div>
-          </CardContent>
-          <CardFooter className="flex flex-col space-y-4">
-            <Button 
-              type="submit" 
-              className="w-full" 
-              disabled={loading}
+        <CardContent className="space-y-4">
+          <Alert className="bg-blue-50 border-blue-200">
+            <Shield className="h-4 w-4 text-blue-600" />
+            <AlertTitle className="text-blue-900">Secure Authentication</AlertTitle>
+            <AlertDescription className="text-blue-700">
+              • Only authorized Google accounts can access this application<br/>
+              • You must have access to the company spreadsheet<br/>
+              • Your session will be saved securely
+            </AlertDescription>
+          </Alert>
+
+          <div className="space-y-2">
+            <Button
+              onClick={signIn}
+              disabled={!gapiInited || !gisInited}
+              className="w-full h-12 text-base"
+              size="lg"
             >
-              {loading ? (
+              {(!gapiInited || !gisInited) ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Initializing...
                 </>
               ) : (
-                'Sign in'
+                <>
+                  <LogIn className="mr-2 h-5 w-5" />
+                  Sign in with Google
+                </>
               )}
             </Button>
-            <p className="text-sm text-center text-gray-600 dark:text-gray-400">
-              Don&apos;t have an account?{' '}
-              <Link 
-                href="/register" 
-                className="font-medium text-primary hover:underline"
-              >
-                Sign up
-              </Link>
+            
+            <p className="text-xs text-gray-500 text-center mt-4">
+              By signing in, you agree to access company data responsibly and maintain confidentiality.
             </p>
-          </CardFooter>
-        </form>
+          </div>
+        </CardContent>
       </Card>
     </div>
   )

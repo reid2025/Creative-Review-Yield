@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { tagService, type Tag } from '@/lib/firebase-tag-service'
-import { useAuth } from '@/contexts/AuthContext'
+import { useGoogleAuth } from '@/contexts/GoogleAuthContext'
 import { toast } from 'sonner'
 import { collection, query, where, onSnapshot } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -11,7 +11,7 @@ interface TagOption {
 }
 
 export function useTagOptions(fieldName: string) {
-  const { user } = useAuth()
+  const { user } = useGoogleAuth()
   const [options, setOptions] = useState<TagOption[]>([])
   const [loading, setLoading] = useState(true)
 

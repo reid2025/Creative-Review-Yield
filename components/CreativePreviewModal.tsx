@@ -3,6 +3,8 @@
 import NextImage from 'next/image'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { CreativeHistoryViewer } from './CreativeHistoryViewer'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 // UI Components
 import {
@@ -17,7 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 
 // Icons
-import { ArrowLeft, Save, Edit } from 'lucide-react'
+import { ArrowLeft, Save, Edit, History, FileText } from 'lucide-react'
 
 interface CreativeData {
   // Basic info
@@ -85,6 +87,20 @@ interface CreativeData {
   designerRemarks?: string
   internalNotes?: string
   uploadGoogleDocLink?: string
+  
+  // Google Sheets Sync fields
+  accountName?: string
+  campaignName?: string
+  creativeHistory?: Array<{
+    date: string
+    cost: string
+    costPerWebsiteLead: string
+    costPerLinkClick: string
+    syncedAt: { toDate: () => Date } | Date
+    dataSource: string
+  }>
+  lastSyncedAt?: { toDate: () => Date } | Date
+  syncSource?: string
 }
 
 interface CreativePreviewModalProps {
@@ -138,7 +154,25 @@ export default function CreativePreviewModal({
           </DialogDescription>
         </DialogHeader>
         
-        <div className="flex gap-6 mt-4" style={{ height: 'calc(75vh - 100px)' }}>
+        <Tabs defaultValue="details" className="mt-4">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="details" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Creative Details
+            </TabsTrigger>
+            <TabsTrigger value="history" className="flex items-center gap-2" disabled={!creativeData.creativeHistory || creativeData.creativeHistory.length === 0}>
+              <History className="h-4 w-4" />
+              Performance History
+              {creativeData.creativeHistory && creativeData.creativeHistory.length > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 px-1 text-xs">
+                  {creativeData.creativeHistory.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="details" className="mt-4">
+            <div className="flex gap-6" style={{ height: 'calc(75vh - 150px)' }}>
           {/* Left Column - Image with Magnifying Glass */}
           <div className="w-[45%]">
             {creativeData.imageUrl && (
@@ -482,6 +516,31 @@ export default function CreativePreviewModal({
             </div>
           </div>
         </div>
+          </TabsContent>
+          
+          <TabsContent value="history" className="mt-4">
+            <div style={{ height: 'calc(75vh - 150px)', overflowY: 'auto' }}>
+              {creativeData.creativeHistory && creativeData.creativeHistory.length > 0 ? (
+                <CreativeHistoryViewer
+                  history={creativeData.creativeHistory}
+                  currentCost={creativeData.amountSpent}
+                  currentCPL={creativeData.costPerWebsiteLead}
+                  currentCPC={creativeData.costPerClick}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <History className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">No performance history available</p>
+                    <p className="text-sm text-gray-500 mt-2">
+                      History will appear here after syncing from Google Sheets
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
 
         <DialogFooter className="flex justify-between mt-6">
           {mode === 'preview' ? (

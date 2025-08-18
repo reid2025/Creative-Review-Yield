@@ -12,7 +12,7 @@ import {
   Timestamp
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { useAuth } from '@/contexts/AuthContext'
+import { useGoogleAuth } from '@/contexts/GoogleAuthContext'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 
@@ -103,7 +103,7 @@ interface Takeaway {
 }
 
 export default function TakeawayHistoryPage() {
-  const { user } = useAuth()
+  const { user } = useGoogleAuth()
   const router = useRouter()
   
   // State
