@@ -18,11 +18,6 @@ export const sidebarNavItems: SidebarNavItem[] = [
     href: "/google-sheets-records",
   },
   {
-    label: "Upload Creatives",
-    icon: "002-plus.png",
-    href: "/upload",
-  },
-  {
     label: "Creatives",
     icon: "003-shine.png",
     href: "/creatives",

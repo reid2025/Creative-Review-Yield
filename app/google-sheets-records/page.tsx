@@ -244,7 +244,8 @@ export default function GoogleSheetsRecordsPage() {
         })
         
         if (creativeId) {
-          router.push(`/upload/single?edit=${creativeId}&from=google-sheets`)
+          // Redirect to creative-details page for editing
+          router.push(`/google-sheets-records/creative-details?edit=${creativeId}&from=google-sheets`)
           return
         }
       } catch (error) {
@@ -253,7 +254,8 @@ export default function GoogleSheetsRecordsPage() {
       }
     }
     
-    router.push('/upload/single?from=google-sheets')
+    // Redirect to creative-details page for new creative
+    router.push('/google-sheets-records/creative-details?from=google-sheets')
   }
 
   // Get latest performance metrics

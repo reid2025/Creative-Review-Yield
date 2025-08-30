@@ -338,10 +338,8 @@ const SidebarNav: React.FC = () => {
             href={item.href}
             icon={item.icon}
             label={item.label}
-            isActive={
-              item.href === "/upload" 
-                ? pathname.startsWith("/upload")
-                : pathname === item.href
+            isActive={pathname === item.href || 
+              (item.href === "/google-sheets-records" && pathname.startsWith("/google-sheets-records"))
             }
           />
         ))}
@@ -467,14 +465,6 @@ const SidebarProfile: React.FC = () => {
               <div className="py-1">
                 {user ? (
                   <>
-                    <DropdownMenuItem asChild className="cursor-pointer">
-                      <Link href="/drafts" className="flex items-center">
-                        <svg className="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                        <span>My Drafts</span>
-                      </Link>
-                    </DropdownMenuItem>
                     <DropdownMenuItem className="cursor-pointer">
                       <Settings className="mr-2 w-4 h-4" />
                       <span>Settings</span>
