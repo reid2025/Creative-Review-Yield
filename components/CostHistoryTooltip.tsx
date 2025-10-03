@@ -1,6 +1,6 @@
 'use client'
 
-import { format } from 'date-fns'
+import { formatCTDate, fromFirebaseTimestamp } from '@/lib/timezone-utils'
 import { CreativeHistoryEntry } from '@/types/creative'
 import {
   HoverCard,
@@ -83,7 +83,7 @@ export function CostHistoryTooltip({
 
           {/* Current Metrics */}
           <div className="space-y-2 border-b pb-3">
-            <div className="text-xs font-medium text-gray-600">Current Metrics</div>
+            <div className="text-xs text-gray-600">Current Metrics</div>
             
             <div className="grid grid-cols-3 gap-2">
               <div className="space-y-1">
@@ -132,13 +132,13 @@ export function CostHistoryTooltip({
 
           {/* History List */}
           <div className="space-y-2">
-            <div className="text-xs font-medium text-gray-600">Recent History</div>
+            <div className="text-xs text-gray-600">Recent History</div>
             <div className="max-h-48 overflow-y-auto space-y-2">
               {history.slice(-5).reverse().map((entry, index) => (
                 <div key={index} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50 text-xs">
                   <div className="flex items-center gap-2">
                     <span className="text-gray-500">
-                      {format(new Date(entry.date), 'MMM dd')}
+                      {formatCTDate(entry.date, 'MMM dd')}
                     </span>
                     <Badge variant="outline" className="text-xs h-4 px-1">
                       {entry.dataSource}
@@ -147,15 +147,15 @@ export function CostHistoryTooltip({
                   <div className="flex gap-3 text-right">
                     <div>
                       <span className="text-gray-500">Spend:</span>
-                      <span className="ml-1 font-medium">{formatCurrency(entry.cost)}</span>
+                      <span className="ml-1">{formatCurrency(entry.cost)}</span>
                     </div>
                     <div>
                       <span className="text-gray-500">CPL:</span>
-                      <span className="ml-1 font-medium">{formatCurrency(entry.costPerWebsiteLead)}</span>
+                      <span className="ml-1">{formatCurrency(entry.costPerWebsiteLead)}</span>
                     </div>
                     <div>
                       <span className="text-gray-500">CPC:</span>
-                      <span className="ml-1 font-medium">{formatCurrency(entry.costPerLinkClick)}</span>
+                      <span className="ml-1">{formatCurrency(entry.costPerLinkClick)}</span>
                     </div>
                   </div>
                 </div>
@@ -166,7 +166,7 @@ export function CostHistoryTooltip({
           {/* Footer */}
           {lastHistory?.syncedAt && (
             <div className="text-xs text-gray-500 pt-2 border-t">
-              Last synced: {format(new Date(lastHistory.syncedAt.toDate ? lastHistory.syncedAt.toDate() : lastHistory.syncedAt), 'MMM dd, HH:mm')}
+              Last synced: {formatCTDate(fromFirebaseTimestamp(lastHistory.syncedAt), 'MMM dd, HH:mm')}
             </div>
           )}
         </div>

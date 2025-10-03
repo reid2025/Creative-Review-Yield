@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { format } from 'date-fns'
+import { formatCTDate } from '@/lib/timezone-utils'
 import { CreativeHistoryEntry } from '@/types/creative'
 import {
   LineChart,
@@ -65,7 +65,7 @@ export function PerformanceHoverCard({ history, children }: PerformanceHoverCard
   
   // Show all entries in chart, dynamically sized
   const chartData = sortedHistory.map(entry => ({
-    date: format(new Date(entry.date), 'MMM dd'),
+    date: formatCTDate(entry.date, 'MMM dd'),
     cost: parseFloat(entry.cost || '0'),
     cpl: parseFloat(entry.costPerWebsiteLead || '0'),
     cpc: parseFloat(entry.costPerLinkClick || '0'),
@@ -198,7 +198,7 @@ export function PerformanceHoverCard({ history, children }: PerformanceHoverCard
               <div className="grid grid-cols-3 gap-2">
                 <div className="bg-gray-50 rounded p-2">
                   <div className="text-xs text-gray-600">Total Spend</div>
-                  <div className="font-bold text-sm">{formatCurrency(latestEntry?.cost || 0)}</div>
+                  <div className="text-sm">{formatCurrency(latestEntry?.cost || 0)}</div>
                   {previousEntry && (
                     <div className="flex items-center gap-1 text-xs mt-1">
                       <TrendIcon value={costTrend} />
@@ -211,7 +211,7 @@ export function PerformanceHoverCard({ history, children }: PerformanceHoverCard
                 
                 <div className="bg-gray-50 rounded p-2">
                   <div className="text-xs text-gray-600">Cost/Lead</div>
-                  <div className="font-bold text-sm">{formatCurrency(latestEntry?.costPerWebsiteLead || 0)}</div>
+                  <div className="text-sm">{formatCurrency(latestEntry?.costPerWebsiteLead || 0)}</div>
                   {previousEntry && (
                     <div className="flex items-center gap-1 text-xs mt-1">
                       <TrendIcon value={cplTrend} />
@@ -224,7 +224,7 @@ export function PerformanceHoverCard({ history, children }: PerformanceHoverCard
                 
                 <div className="bg-gray-50 rounded p-2">
                   <div className="text-xs text-gray-600">Cost/Click</div>
-                  <div className="font-bold text-sm">{formatCurrency(latestEntry?.costPerLinkClick || 0)}</div>
+                  <div className="text-sm">{formatCurrency(latestEntry?.costPerLinkClick || 0)}</div>
                   {previousEntry && (
                     <div className="flex items-center gap-1 text-xs mt-1">
                       <TrendIcon value={cpcTrend} />
@@ -238,65 +238,83 @@ export function PerformanceHoverCard({ history, children }: PerformanceHoverCard
 
               {/* Dynamic Chart - Shows ALL history entries */}
               {chartData.length > 1 && (
-                <div style={{ height: `${chartHeight}px` }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis 
-                        dataKey="date" 
-                        tick={{ fontSize: entriesCount > 20 ? 8 : 10 }}
-                        stroke="#888"
-                        angle={entriesCount > 15 ? -45 : 0}
-                        textAnchor={entriesCount > 15 ? "end" : "middle"}
-                        height={entriesCount > 15 ? 50 : 30}
-                      />
-                      <YAxis 
-                        tick={{ fontSize: 10 }}
-                        stroke="#888"
-                        domain={[0, 'auto']}
-                        hide
-                      />
-                      <Tooltip 
-                        formatter={(value: number) => formatCurrency(value)}
-                        contentStyle={{ 
-                          backgroundColor: 'white',
-                          border: '1px solid #e0e0e0',
-                          borderRadius: '4px',
-                          fontSize: '11px'
-                        }}
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="cost" 
-                        stroke="#3b82f6" 
-                        strokeWidth={2}
-                        dot={{ r: entriesCount > 30 ? 2 : 3 }}
-                        name="Spend"
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="cpl" 
-                        stroke="#10b981" 
-                        strokeWidth={2}
-                        dot={{ r: entriesCount > 30 ? 2 : 3 }}
-                        name="CPL"
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="cpc" 
-                        stroke="#f59e0b" 
-                        strokeWidth={2}
-                        dot={{ r: entriesCount > 30 ? 2 : 3 }}
-                        name="CPC"
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
+                <div className="space-y-3">
+                  <div style={{ height: `${chartHeight}px` }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis 
+                          dataKey="date" 
+                          tick={{ fontSize: entriesCount > 20 ? 8 : 10 }}
+                          stroke="#888"
+                          angle={entriesCount > 15 ? -45 : 0}
+                          textAnchor={entriesCount > 15 ? "end" : "middle"}
+                          height={entriesCount > 15 ? 50 : 30}
+                        />
+                        <YAxis 
+                          tick={{ fontSize: 10 }}
+                          stroke="#888"
+                          domain={[0, 'auto']}
+                          hide
+                        />
+                        <Tooltip 
+                          formatter={(value: number) => formatCurrency(value)}
+                          contentStyle={{ 
+                            backgroundColor: 'white',
+                            border: '1px solid #e0e0e0',
+                            borderRadius: '4px',
+                            fontSize: '11px'
+                          }}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="cost" 
+                          stroke="#3b82f6" 
+                          strokeWidth={2}
+                          dot={{ r: entriesCount > 30 ? 2 : 3 }}
+                          name="Spend"
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="cpl" 
+                          stroke="#10b981" 
+                          strokeWidth={2}
+                          dot={{ r: entriesCount > 30 ? 2 : 3 }}
+                          name="CPL"
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="cpc" 
+                          stroke="#f59e0b" 
+                          strokeWidth={2}
+                          dot={{ r: entriesCount > 30 ? 2 : 3 }}
+                          name="CPC"
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                  
+                  {/* Chart Legend */}
+                  <div className="flex items-center gap-4 px-2">
+                    <div className="flex items-center gap-2" aria-label="Blue line: Total Spend">
+                      <div className="w-3 h-0.5 bg-[#3b82f6] rounded-full"></div>
+                      <span className="text-xs font-medium text-black">Spend</span>
+                    </div>
+                    <div className="flex items-center gap-2" aria-label="Green line: Cost per Lead">
+                      <div className="w-3 h-0.5 bg-[#10b981] rounded-full"></div>
+                      <span className="text-xs font-medium text-black">Cost/Lead</span>
+                    </div>
+                    <div className="flex items-center gap-2" aria-label="Orange line: Cost per Click">
+                      <div className="w-3 h-0.5 bg-[#f59e0b] rounded-full"></div>
+                      <span className="text-xs font-medium text-black">Cost/Click</span>
+                    </div>
+                  </div>
                 </div>
               )}
 
               {/* Latest Update Info */}
               <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t">
-                <span>Last updated: {format(new Date(latestEntry?.date || new Date()), 'MMM dd, yyyy')}</span>
+                <span>Last updated: {formatCTDate(latestEntry?.date)}</span>
                 <Badge variant="secondary" className="text-xs">
                   {latestEntry?.dataSource || 'manual'}
                 </Badge>

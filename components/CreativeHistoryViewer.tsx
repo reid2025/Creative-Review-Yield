@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { format } from 'date-fns'
+import { formatCTDate, fromFirebaseTimestamp } from '@/lib/timezone-utils'
 import { CreativeHistoryEntry } from '@/types/creative'
 import {
   LineChart,
@@ -88,7 +88,7 @@ export function CreativeHistoryViewer({
 
   // Prepare data for chart
   const chartData = sortedHistory.map(entry => ({
-    date: format(new Date(entry.date), 'MMM dd'),
+    date: formatCTDate(entry.date, 'MMM dd'),
     fullDate: entry.date, // Keep full date for sorting
     cost: parseFloat(entry.cost || '0'),
     cpl: parseFloat(entry.costPerWebsiteLead || '0'),
@@ -111,6 +111,28 @@ export function CreativeHistoryViewer({
       cpc: parseFloat(currentCPC || '0'),
     })
   }
+
+  // Calculate lifetime totals and weighted averages
+  const totalSpend = chartData.reduce((sum, entry) => sum + entry.cost, 0)
+  
+  // Calculate total leads and clicks from cost and per-unit costs
+  const totalLeads = chartData.reduce((sum, entry) => {
+    if (entry.cpl > 0) {
+      return sum + (entry.cost / entry.cpl)
+    }
+    return sum
+  }, 0)
+  
+  const totalClicks = chartData.reduce((sum, entry) => {
+    if (entry.cpc > 0) {
+      return sum + (entry.cost / entry.cpc)
+    }
+    return sum
+  }, 0)
+  
+  // Weighted averages based on lifetime totals
+  const lifetimeCPL = totalLeads > 0 ? totalSpend / totalLeads : 0
+  const lifetimeCPC = totalClicks > 0 ? totalSpend / totalClicks : 0
 
   // Calculate trends
   const calculateTrend = (values: number[]) => {
@@ -149,16 +171,16 @@ export function CreativeHistoryViewer({
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium">Total Spend</CardTitle>
+              <CardTitle className="text-sm">Total Spend (Lifetime)</CardTitle>
               <DollarSign className="h-4 w-4 text-gray-400" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(currentCost || chartData[chartData.length - 1]?.cost || 0)}</div>
+            <div className="text-2xl">{formatCurrency(totalSpend)}</div>
             {Math.abs(costTrend) > 0.01 && (
               <div className="flex items-center gap-1 text-xs text-gray-600 mt-1">
                 <TrendIcon trend={costTrend} />
-                <span>{Math.abs(costTrend).toFixed(1)}%</span>
+                <span>{Math.abs(costTrend).toFixed(1)}% vs prev day</span>
               </div>
             )}
           </CardContent>
@@ -167,16 +189,21 @@ export function CreativeHistoryViewer({
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium">Cost per Lead</CardTitle>
+              <CardTitle className="text-sm">Cost per Lead (Avg)</CardTitle>
               <TrendingUp className="h-4 w-4 text-gray-400" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(currentCPL || chartData[chartData.length - 1]?.cpl || 0)}</div>
+            <div className="text-2xl">{formatCurrency(lifetimeCPL)}</div>
+            {totalLeads > 0 && (
+              <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                <span>{totalLeads.toFixed(1)} total leads</span>
+              </div>
+            )}
             {Math.abs(cplTrend) > 0.01 && (
               <div className="flex items-center gap-1 text-xs text-gray-600 mt-1">
                 <TrendIcon trend={cplTrend} />
-                <span>{Math.abs(cplTrend).toFixed(1)}%</span>
+                <span>{Math.abs(cplTrend).toFixed(1)}% vs prev day</span>
               </div>
             )}
           </CardContent>
@@ -185,16 +212,21 @@ export function CreativeHistoryViewer({
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium">Cost per Click</CardTitle>
+              <CardTitle className="text-sm">Cost per Click (Avg)</CardTitle>
               <TrendingDown className="h-4 w-4 text-gray-400" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(currentCPC || chartData[chartData.length - 1]?.cpc || 0)}</div>
+            <div className="text-2xl">{formatCurrency(lifetimeCPC)}</div>
+            {totalClicks > 0 && (
+              <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                <span>{totalClicks.toFixed(0)} total clicks</span>
+              </div>
+            )}
             {Math.abs(cpcTrend) > 0.01 && (
               <div className="flex items-center gap-1 text-xs text-gray-600 mt-1">
                 <TrendIcon trend={cpcTrend} />
-                <span>{Math.abs(cpcTrend).toFixed(1)}%</span>
+                <span>{Math.abs(cpcTrend).toFixed(1)}% vs prev day</span>
               </div>
             )}
           </CardContent>
@@ -289,29 +321,37 @@ export function CreativeHistoryViewer({
                       <TableHead>Total Spend</TableHead>
                       <TableHead>Cost per Lead</TableHead>
                       <TableHead>Cost per Click</TableHead>
-                      <TableHead>Source</TableHead>
-                      <TableHead>Synced</TableHead>
+                      <TableHead>Leads</TableHead>
+                      <TableHead>Clicks</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {sortedHistory.map((entry, index) => (
                       <TableRow key={index}>
-                        <TableCell className="font-medium">
+                        <TableCell className="">
                           <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-gray-400" />
-                            {format(new Date(entry.date), 'MMM dd, yyyy')}
+                            {formatCTDate(entry.date, 'MMM dd, yyyy')}
                           </div>
                         </TableCell>
                         <TableCell>{formatCurrency(entry.cost)}</TableCell>
                         <TableCell>{formatCurrency(entry.costPerWebsiteLead)}</TableCell>
                         <TableCell>{formatCurrency(entry.costPerLinkClick)}</TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="text-xs">
-                            {entry.dataSource}
-                          </Badge>
+                          {(() => {
+                            const cost = parseFloat(entry.cost || '0');
+                            const cpl = parseFloat(entry.costPerWebsiteLead || '0');
+                            const leads = cpl > 0 ? Math.round(cost / cpl) : 0;
+                            return leads;
+                          })()}
                         </TableCell>
-                        <TableCell className="text-gray-500 text-xs">
-                          {entry.syncedAt && format(new Date(entry.syncedAt.toDate()), 'MMM dd, HH:mm')}
+                        <TableCell>
+                          {(() => {
+                            const cost = parseFloat(entry.cost || '0');
+                            const cpc = parseFloat(entry.costPerLinkClick || '0');
+                            const clicks = cpc > 0 ? Math.round(cost / cpc) : 0;
+                            return clicks;
+                          })()}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -326,13 +366,21 @@ export function CreativeHistoryViewer({
                         <TableCell className="font-bold">{formatCurrency(currentCost || '0')}</TableCell>
                         <TableCell className="font-bold">{formatCurrency(currentCPL || '0')}</TableCell>
                         <TableCell className="font-bold">{formatCurrency(currentCPC || '0')}</TableCell>
-                        <TableCell>
-                          <Badge className="text-xs">
-                            Live
-                          </Badge>
+                        <TableCell className="font-bold">
+                          {(() => {
+                            const cost = parseFloat(currentCost || '0');
+                            const cpl = parseFloat(currentCPL || '0');
+                            const leads = cpl > 0 ? Math.round(cost / cpl) : 0;
+                            return leads;
+                          })()}
                         </TableCell>
-                        <TableCell className="text-gray-500 text-xs">
-                          Now
+                        <TableCell className="font-bold">
+                          {(() => {
+                            const cost = parseFloat(currentCost || '0');
+                            const cpc = parseFloat(currentCPC || '0');
+                            const clicks = cpc > 0 ? Math.round(cost / cpc) : 0;
+                            return clicks;
+                          })()}
                         </TableCell>
                       </TableRow>
                     )}

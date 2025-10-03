@@ -129,7 +129,7 @@ class FirebaseAIService {
   private tagsLoaded = false
   private retryAttempts = 0
   private maxRetries = 3
-  private retryDelay = 1000 // Start with 1 second delay
+  private retryDelay = 2000 // Start with 2 second delay for rate limiting
 
   /**
    * Load all available tags from the tag glossary
@@ -202,7 +202,12 @@ ${tagsJson}
 ANALYSIS INSTRUCTIONS:
 
 STEP 1: READ AND UNDERSTAND THE CREATIVE
-- Extract ALL visible text (headlines, body copy, CTA buttons, disclaimers)
+- Extract ALL visible text with TEXT HIERARCHY AWARENESS:
+  * HEADLINE: The largest, most prominent text (usually at top)
+  * SUBHEADLINE/PREHEADLINE: Secondary text that supports the headline (smaller than headline)
+  * BODY COPY: Main descriptive text, paragraphs, bullet points
+  * CTA: Call-to-action button text
+  * DISCLAIMER: Fine print, legal text (usually smallest)
 - Analyze imagery (people, objects, settings, style)
 - Understand the legal/medical context
 - Identify target audience and messaging strategy
@@ -214,8 +219,6 @@ For each field, follow this process:
 3. Decide: use existing option OR suggest new option
 
 FIELD ANALYSIS LOGIC:
-
-DESIGNER: Look for style patterns, if detectable from available designers
 
 LITIGATION NAME: 
 - Look for specific product names (Ozempic, Paraquat, AFFF, etc.)
@@ -237,6 +240,25 @@ IMAGERY TYPE & BACKGROUND:
 - What's the background style?
 - Select multiple from available options if applicable
 
+TEXT EXTRACTION RULES:
+- HEADLINE: Look for the LARGEST, most visually prominent text (usually at top or center)
+- PREHEADLINE: Smaller supporting text that appears ABOVE the headline OR sets context for it
+- CTA BUTTON: Extract EXACT text from clickable buttons or action prompts
+- BODY COPY SUMMARY: Don't just list the text - analyze and summarize what the creative is trying to communicate, the offer being made, and the strategy being used
+
+EXAMPLE OF CORRECT TEXT EXTRACTION:
+If you see a creative with:
+- Large blue text: "LUNG CANCER?"
+- Smaller text below: "ELIGIBLE FOR A 6-FIGURE PAYOUT?"
+- Body text: "If you or a loved one was diagnosed within the past 3 years, you may qualify for a $100,000 - $300,000 payout."
+- Button: "START QUICK QUIZ NOW"
+
+CORRECT extraction:
+- headlineText: "LUNG CANCER?"
+- preheadlineText: "ELIGIBLE FOR A 6-FIGURE PAYOUT?"
+- ctaLabel: "START QUICK QUIZ NOW"
+- bodyCopySummary: "This creative targets lung cancer patients with a compensation quiz format, emphasizing substantial 6-figure payouts and recent diagnosis timeframe to create urgency and drive quiz completion"
+
 CTA ANALYSIS:
 - Extract EXACT CTA button text for ctaLabel
 - Analyze CTA verb, style, color, position
@@ -253,11 +275,6 @@ AUDIENCE ANALYSIS:
 
 OUTPUT FORMAT:
 {
-   "designer": {
-       "selectedOption": "exact value from available options OR null",
-       "suggestedNewOption": "new option if no good match OR null",
-       "reasoning": "why this choice was made"
-   },
    "litigationName": {
        "selectedOption": "exact value from available options OR null", 
        "suggestedNewOption": "new option if no good match OR null",
@@ -339,10 +356,10 @@ OUTPUT FORMAT:
        "reasoning": "why this choice was made"
    },
    "extractedText": {
-       "preheadlineText": "exact text from image OR null",
-       "headlineText": "exact text from image OR null",
-       "ctaLabel": "exact CTA button text OR null",
-       "bodyCopySummary": "summary of main copy OR null"
+       "preheadlineText": "text that appears ABOVE or supports the main headline (smaller text that sets context) OR null",
+       "headlineText": "the LARGEST, most prominent text - the main message that grabs attention OR null",
+       "ctaLabel": "exact text on buttons or calls-to-action (e.g., 'START QUIZ NOW', 'LEARN MORE') OR null",
+       "bodyCopySummary": "analytical summary of what the creative communicates - describe the offer, positioning, and message strategy (e.g., 'This creative targets lung cancer patients with a compensation quiz, emphasizing 6-figure payouts to drive urgency') OR null"
    },
    "booleanFields": {
        "questionBasedHeadline": true/false,
@@ -387,22 +404,27 @@ Return ONLY the JSON object, no additional text or explanation.`
       return await fn()
     } catch (error) {
       if (retries <= 0) {
+        // Provide better error messages after all retries are exhausted
+        if ((error as Error).message?.includes('429')) {
+          throw new Error('Rate limit exceeded. The AI service is temporarily overloaded. Please try again in a few minutes.')
+        }
         throw error
       }
-      
+
       // Check if error is retryable
-      const isRetryable = 
+      const isRetryable =
         (error as Error).message?.includes('503') || // Service unavailable
         (error as Error).message?.includes('500') || // Internal server error
         (error as Error).message?.includes('429') || // Rate limited
         (error as Error).message?.includes('timeout') || // Timeout
         (error as Error).message?.includes('ECONNRESET') // Connection reset
-      
+
       if (!isRetryable) {
         throw error
       }
-      
-      console.log(`⏳ Retrying in ${delay}ms... (${this.maxRetries - retries + 1}/${this.maxRetries})`)
+
+      const retryType = (error as Error).message?.includes('429') ? 'Rate limit hit' : 'Service error'
+      console.log(`⏳ ${retryType}, retrying in ${delay}ms... (${this.maxRetries - retries + 1}/${this.maxRetries})`)
       await new Promise(resolve => setTimeout(resolve, delay))
       return this.retryWithBackoff(fn, retries - 1, delay * 2) // Exponential backoff
     }
@@ -526,7 +548,9 @@ Return ONLY the JSON object, no additional text or explanation.`
         } else if (apiError.message?.includes('401')) {
           throw new Error('Authentication failed. Please check your Firebase configuration.')
         } else if (apiError.message?.includes('429')) {
-          throw new Error('Rate limit exceeded. Please try again in a few moments.')
+          // Rate limit errors should be retried with backoff - re-throw to let retryWithBackoff handle it
+          console.log('⚠️ Rate limit exceeded, will retry with exponential backoff...')
+          throw apiError
         } else if (apiError.message?.includes('timeout')) {
           throw new Error('Request timed out. Please try again with a smaller image.')
         } else {
@@ -567,7 +591,7 @@ Return ONLY the JSON object, no additional text or explanation.`
         
         // Convert to our format
         const analysisResult: CreativeAnalysisResult = {
-          designer: rawAnalysis.designer?.selectedOption || rawAnalysis.designer?.suggestedNewOption || null,
+          // designer: excluded from AI auto-population
           litigationName: rawAnalysis.litigationName?.selectedOption || rawAnalysis.litigationName?.suggestedNewOption || null,
           campaignType: rawAnalysis.campaignType?.selectedOption || rawAnalysis.campaignType?.suggestedNewOption || null,
           creativeLayoutType: rawAnalysis.creativeLayoutType?.selectedOption || rawAnalysis.creativeLayoutType?.suggestedNewOption || null,
@@ -647,7 +671,7 @@ Return ONLY the JSON object, no additional text or explanation.`
 
     // Validate single-value fields
     const singleValueFields = [
-      'designer', 'litigationName', 'campaignType', 'creativeLayoutType',
+      'litigationName', 'campaignType', 'creativeLayoutType',
       'messagingStructure', 'ctaVerb', 'ctaStyleGroup', 'ctaColor',
       'ctaPosition', 'audiencePersona', 'campaignTrigger'
     ]
@@ -780,7 +804,7 @@ Return ONLY the JSON object, no additional text or explanation.`
     accountName?: string
     campaignName?: string
     litigationName?: string
-    performanceHistory?: any[]
+    performanceHistory?: unknown[]
   }): Promise<CreativeAnalysisResult> {
     console.log('═══════════════════════════════════════════════')
     console.log('🚀 GOOGLE SHEETS IMAGE ANALYSIS STARTING')
@@ -807,44 +831,59 @@ Return ONLY the JSON object, no additional text or explanation.`
         return this.getDefaultAnalysis(data)
       }
 
-      console.log('🔄 Fetching image from URL:', data.imageUrl)
-      
+      console.log('🔄 Fetching image through proxy:', data.imageUrl)
+
       try {
-        // Fetch the image from the URL
-        const response = await fetch(data.imageUrl)
-        if (!response.ok) {
-          throw new Error(`Failed to fetch image: ${response.statusText}`)
+        // Use our API proxy to fetch the image (handles CORS issues)
+        const proxyResponse = await fetch('/api/fetch-image', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            imageUrl: data.imageUrl
+          })
+        })
+
+        if (!proxyResponse.ok) {
+          const errorData = await proxyResponse.json()
+          throw new Error(`Image proxy failed: ${errorData.error || proxyResponse.statusText}`)
         }
-        
-        const blob = await response.blob()
-        console.log('✅ Image fetched successfully')
-        console.log('   Size:', (blob.size / 1024).toFixed(2), 'KB')
-        console.log('   Type:', blob.type)
-        
-        // Convert blob to base64 for Gemini
-        const arrayBuffer = await blob.arrayBuffer()
-        const base64 = btoa(
-          new Uint8Array(arrayBuffer)
-            .reduce((data, byte) => data + String.fromCharCode(byte), '')
-        )
-        
+
+        const proxyData = await proxyResponse.json()
+
+        if (!proxyData.success || !proxyData.dataUrl) {
+          throw new Error('Invalid response from image proxy')
+        }
+
+        console.log('✅ Image fetched successfully through proxy')
+        console.log('   Size:', (proxyData.size / 1024).toFixed(2), 'KB')
+        console.log('   Type:', proxyData.contentType)
+
+        // Extract base64 from data URL (remove "data:image/jpeg;base64," prefix)
+        const base64 = proxyData.dataUrl.split(',')[1]
+
         console.log('🤖 Analyzing image with Gemini AI...')
-        
+
         // Build the prompt for analysis
         const prompt = await this.buildGoogleSheetsPrompt(data)
-        
-        // Generate content using Gemini
-        const result = await model.generateContent([
-          prompt,
-          {
-            inlineData: {
-              mimeType: blob.type || 'image/jpeg',
-              data: base64
+
+        // Generate content using Gemini with retry logic
+        const generateContent = async () => {
+          const result = await model.generateContent([
+            prompt,
+            {
+              inlineData: {
+                mimeType: proxyData.contentType || 'image/jpeg',
+                data: base64
+              }
             }
-          }
-        ])
-        
-        const response_text = result.response.text()
+          ])
+          const response = await result.response
+          return response.text()
+        }
+
+        const response_text = await this.retryWithBackoff(generateContent)
         console.log('✅ AI analysis complete')
         console.log('📄 Response preview:', response_text.substring(0, 200))
         
@@ -877,7 +916,7 @@ Return ONLY the JSON object, no additional text or explanation.`
           
           // Convert to our format
           analysis = {
-            designer: rawAnalysis.designer?.selectedOption || rawAnalysis.designer?.suggestedNewOption || null,
+            // designer: excluded from AI processing
             litigationName: data.litigationName || rawAnalysis.litigationName?.selectedOption || rawAnalysis.litigationName?.suggestedNewOption || null,
             campaignType: rawAnalysis.campaignType?.selectedOption || rawAnalysis.campaignType?.suggestedNewOption || 'social-media',
             creativeLayoutType: rawAnalysis.creativeLayoutType?.selectedOption || rawAnalysis.creativeLayoutType?.suggestedNewOption || null,

@@ -376,7 +376,7 @@ export default function TakeawayHistoryPage() {
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
           <History className="h-8 w-8 text-gray-700" />
-          <h1 className="text-3xl font-bold">Takeaway History</h1>
+          <h1 className="font-league-spartan text-3xl font-bold">Takeaway History</h1>
         </div>
         <p className="text-gray-600">
           Review your saved strategy analysis takeaways and insights
@@ -447,7 +447,7 @@ export default function TakeawayHistoryPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Total Takeaways</p>
-                <p className="text-2xl font-bold">{takeaways.length}</p>
+                <p className="text-2xl">{takeaways.length}</p>
               </div>
               <FileText className="h-8 w-8 text-blue-500 opacity-20" />
             </div>
@@ -459,7 +459,7 @@ export default function TakeawayHistoryPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Creatives Analyzed</p>
-                <p className="text-2xl font-bold">
+                <p className="text-2xl">
                   {takeaways.reduce((sum, t) => sum + t.creativesCount, 0)}
                 </p>
               </div>
@@ -473,7 +473,7 @@ export default function TakeawayHistoryPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Avg Insights</p>
-                <p className="text-2xl font-bold">
+                <p className="text-2xl">
                   {takeaways.length > 0 
                     ? Math.round(takeaways.reduce((sum, t) => 
                         sum + t.aiInsights.reduce((s, i) => s + i.insights.length, 0), 0
@@ -491,7 +491,7 @@ export default function TakeawayHistoryPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">This Month</p>
-                <p className="text-2xl font-bold">
+                <p className="text-2xl">
                   {takeaways.filter(t => {
                     const date = t.createdAt.toDate()
                     const now = new Date()
@@ -511,7 +511,7 @@ export default function TakeawayHistoryPage() {
         <Card>
           <CardContent className="py-12 text-center">
             <History className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No takeaways found</h3>
+            <h3 className="text-lg mb-2">No takeaways found</h3>
             <p className="text-gray-600 mb-4">
               {searchQuery || filterLitigation !== 'all' || filterCampaign !== 'all'
                 ? 'Try adjusting your filters'
@@ -549,22 +549,22 @@ export default function TakeawayHistoryPage() {
                   <div className="flex items-center gap-1">
                     <MousePointerClick className="h-3 w-3 text-blue-500" />
                     <span className="text-gray-600">CPC:</span>
-                    <span className="font-medium">${takeaway.metrics.avgCPC}</span>
+                    <span className="">${takeaway.metrics.avgCPC}</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <Users className="h-3 w-3 text-green-500" />
                     <span className="text-gray-600">CPL:</span>
-                    <span className="font-medium">${takeaway.metrics.avgCPL}</span>
+                    <span className="">${takeaway.metrics.avgCPL}</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <DollarSign className="h-3 w-3 text-purple-500" />
                     <span className="text-gray-600">Spent:</span>
-                    <span className="font-medium">${takeaway.metrics.totalSpent}</span>
+                    <span className="">${takeaway.metrics.totalSpent}</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <TrendingUp className="h-3 w-3 text-yellow-500" />
                     <span className="text-gray-600">Top:</span>
-                    <span className="font-medium">{takeaway.metrics.topAdPercentage}%</span>
+                    <span className="">{takeaway.metrics.topAdPercentage}%</span>
                   </div>
                 </div>
                 
@@ -658,30 +658,30 @@ export default function TakeawayHistoryPage() {
               <div className="space-y-6">
                 {/* Metrics Overview */}
                 <div>
-                  <h3 className="font-semibold mb-3">Performance Metrics</h3>
+                  <h3 className="mb-3">Performance Metrics</h3>
                   <div className="grid grid-cols-4 gap-3">
                     <div className="bg-gray-50 p-3 rounded">
                       <p className="text-xs text-gray-600">Avg CPC</p>
-                      <p className="text-lg font-bold">${selectedTakeaway.metrics.avgCPC}</p>
+                      <p className="text-lg">${selectedTakeaway.metrics.avgCPC}</p>
                     </div>
                     <div className="bg-gray-50 p-3 rounded">
                       <p className="text-xs text-gray-600">Avg CPL</p>
-                      <p className="text-lg font-bold">${selectedTakeaway.metrics.avgCPL}</p>
+                      <p className="text-lg">${selectedTakeaway.metrics.avgCPL}</p>
                     </div>
                     <div className="bg-gray-50 p-3 rounded">
                       <p className="text-xs text-gray-600">Total Spent</p>
-                      <p className="text-lg font-bold">${selectedTakeaway.metrics.totalSpent}</p>
+                      <p className="text-lg">${selectedTakeaway.metrics.totalSpent}</p>
                     </div>
                     <div className="bg-gray-50 p-3 rounded">
                       <p className="text-xs text-gray-600">Top Ads</p>
-                      <p className="text-lg font-bold">{selectedTakeaway.metrics.topAdPercentage}%</p>
+                      <p className="text-lg">{selectedTakeaway.metrics.topAdPercentage}%</p>
                     </div>
                   </div>
                 </div>
                 
                 {/* Context */}
                 <div>
-                  <h3 className="font-semibold mb-3">Analysis Context</h3>
+                  <h3 className="mb-3">Analysis Context</h3>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-600">Creatives:</span>
@@ -709,7 +709,7 @@ export default function TakeawayHistoryPage() {
                 {/* User Notes */}
                 {selectedTakeaway.userNotes && (
                   <div>
-                    <h3 className="font-semibold mb-3">Your Notes</h3>
+                    <h3 className="mb-3">Your Notes</h3>
                     <div className="bg-blue-50 p-4 rounded">
                       <p className="text-sm whitespace-pre-wrap">{selectedTakeaway.userNotes}</p>
                     </div>
@@ -718,7 +718,7 @@ export default function TakeawayHistoryPage() {
                 
                 {/* AI Insights */}
                 <div>
-                  <h3 className="font-semibold mb-3">AI Analysis Insights</h3>
+                  <h3 className="mb-3">AI Analysis Insights</h3>
                   <Accordion type="single" collapsible className="space-y-2">
                     {selectedTakeaway.aiInsights.map((section, index) => (
                       <AccordionItem key={index} value={`item-${index}`}>
@@ -739,7 +739,7 @@ export default function TakeawayHistoryPage() {
                           <div className="space-y-3 pl-6">
                             {section.insights.length > 0 && (
                               <div>
-                                <p className="text-sm font-medium mb-2">Insights:</p>
+                                <p className="text-sm mb-2">Insights:</p>
                                 <ul className="space-y-1">
                                   {section.insights.map((insight, i) => (
                                     <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
@@ -752,7 +752,7 @@ export default function TakeawayHistoryPage() {
                             )}
                             {section.recommendations && section.recommendations.length > 0 && (
                               <div>
-                                <p className="text-sm font-medium mb-2">Recommendations:</p>
+                                <p className="text-sm mb-2">Recommendations:</p>
                                 <ul className="space-y-1">
                                   {section.recommendations.map((rec, i) => (
                                     <li key={i} className="text-sm text-gray-600 flex items-start gap-2">

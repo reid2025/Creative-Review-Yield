@@ -21,12 +21,42 @@ export interface FirebaseDraftData {
   creativeFilename: string
   lastSaved: Timestamp
   createdAt: Timestamp
-  status?: 'draft' | 'saved'
+  status?: 'draft' | 'saved' | 'published'
   formData: Record<string, unknown>
   imageUrl?: string
   userId?: string
   aiPopulatedFields?: string[]
-  // Performance history
+
+  // NEW MULTI-USER FIELDS (optional for backward compatibility)
+  creativeId?: string  // Based on image asset ID for deduplication
+  createdBy?: {
+    email: string
+    googleId: string
+    name: string
+    photoURL: string
+  }
+  userDrafts?: Record<string, {
+    formData: Record<string, unknown>
+    lastSaved: Timestamp
+  }>
+  publishedVersion?: {
+    formData: Record<string, unknown>
+    publishedAt: Timestamp
+    publishedBy: {
+      email: string
+      name: string
+    }
+  }
+  editHistory?: Array<{
+    name: string
+    email: string
+    action: 'created' | 'edited' | 'published'
+    timestamp: Timestamp
+    details?: string
+  }>
+  version?: number
+
+  // Performance history (existing)
   creativeHistory?: Array<{
     date: string
     cost: string
@@ -54,6 +84,36 @@ export class FirebaseDraftService {
     } catch (error) {
       console.error('❌ Firebase connection test failed:', error)
       return false
+    }
+  }
+
+  /**
+   * Generate creative ID based on image asset (for deduplication)
+   */
+  private static generateCreativeId(formData: Record<string, unknown>): string {
+    // Use image asset name or URL as the unique identifier
+    const imageAsset = formData.creativeFilename || formData.imageUrl || formData.imageAssetName
+
+    if (imageAsset && typeof imageAsset === 'string') {
+      // Create a stable ID from the image asset
+      return btoa(imageAsset).replace(/[^a-zA-Z0-9]/g, '').substring(0, 20)
+    }
+
+    // Fallback to timestamp-based ID for creatives without images
+    return `creative_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  }
+
+  /**
+   * Get user data from GoogleAuth context (to be called from components)
+   */
+  private static getUserData(user: any): { email: string; googleId: string; name: string; photoURL: string } | null {
+    if (!user) return null
+
+    return {
+      email: user.email || '',
+      googleId: user.access_token || '', // Using access_token as googleId for now
+      name: user.name || '',
+      photoURL: user.picture || ''
     }
   }
 
@@ -87,15 +147,15 @@ export class FirebaseDraftService {
   }
 
   /**
-   * Save or update a draft in Firestore
+   * Save or update a draft in Firestore (with multi-user support)
    */
-  static async saveDraft(data: Partial<FirebaseDraftData>, imageFile?: File): Promise<string> {
+  static async saveDraft(data: Partial<FirebaseDraftData>, imageFile?: File, user?: any): Promise<string> {
     try {
       // Saving draft to Firebase
       
       // Clean the formData to remove non-serializable objects like File and undefined values
-      const cleanFormData = this.cleanObject({ ...data.formData })
-      if (cleanFormData && cleanFormData.uploadedImage) {
+      const cleanFormData = this.cleanObject({ ...data.formData }) as Record<string, unknown>
+      if (cleanFormData && typeof cleanFormData === 'object' && cleanFormData.uploadedImage) {
         // Store only file metadata, not the actual File object
         const file = cleanFormData.uploadedImage as File
         if (file && typeof file === 'object' && file.name) {
@@ -108,7 +168,7 @@ export class FirebaseDraftService {
           }
         }
       }
-      
+
       // Extract performanceHistory from formData if it exists
       // BUT don't save it as creativeHistory if it's from Google Sheets
       const performanceHistory = cleanFormData?.performanceHistory as FirebaseDraftData['creativeHistory']
@@ -116,24 +176,65 @@ export class FirebaseDraftService {
         delete cleanFormData.performanceHistory // Remove from formData to store separately
       }
       
-      // Clean the entire draft data object to remove undefined values
-      const draftData = this.cleanObject({
+      // Get user data for multi-user tracking
+      const userData = user ? this.getUserData(user) : null
+      const currentUserId = data.userId || userData?.email || 'anonymous'
+
+
+      // Generate or use existing creative ID
+      const creativeId = data.creativeId || this.generateCreativeId(cleanFormData)
+
+      // Prepare base draft data (backward compatible)
+      const baseDraftData = {
         creativeFilename: data.creativeFilename || 'Untitled',
-        lastSaved: serverTimestamp() as Timestamp,
-        status: data.status || 'saved', // Default to saved
+        lastSaved: Timestamp.fromMillis(Date.now()),
+        status: data.status || 'draft', // Default to draft for new system
         formData: cleanFormData || {},
         aiPopulatedFields: data.aiPopulatedFields || [],
-        userId: data.userId || 'anonymous',
-        // Don't save creativeHistory - it should not be stored in Firebase
-        // creativeHistory: performanceHistory || data.creativeHistory
-      })
+        userId: currentUserId,
+      }
+
+      // NEW MULTI-USER STRUCTURE (only add if user data available)
+      let multiUserData = {}
+      if (userData) {
+        multiUserData = {
+          creativeId,
+          createdBy: data.createdBy || userData, // Set creator on first save
+          userDrafts: {
+            ...(data.userDrafts || {}),
+            [userData.email]: {
+              formData: cleanFormData || {},
+              lastSaved: Timestamp.fromMillis(Date.now())
+            }
+          },
+          editHistory: [
+            ...(data.editHistory || []),
+            {
+              name: userData.name,
+              email: userData.email,
+              action: data.id ? 'edited' : 'created',
+              timestamp: Timestamp.fromMillis(Date.now()),
+              details: data.id ? 'Updated draft' : 'Created new draft'
+            }
+          ],
+          version: (data.version || 0) + 1
+        }
+      }
+
+      // Combine base data with multi-user data
+      const draftData = this.cleanObject({
+        ...baseDraftData,
+        ...multiUserData,
+        // Preserve existing published version if exists
+        publishedVersion: data.publishedVersion
+      }) as Record<string, unknown>
 
       // Prepared draft data for Firebase
 
       // Handle image upload if provided (skip if storage permission issues)
       if (imageFile) {
         try {
-          const imageData = await this.uploadImage(imageFile, draftData.creativeFilename!)
+          const imageData = await this.uploadImage(imageFile, (draftData.creativeFilename as string) || 'untitled')
           draftData.imageUrl = imageData.downloadUrl
           // Image uploaded successfully - we don't need to save the storage path
         } catch (imageError) {
@@ -148,14 +249,14 @@ export class FirebaseDraftService {
         const draftRef = doc(db, this.COLLECTION_NAME, data.id)
         await updateDoc(draftRef, {
           ...draftData,
-          lastSaved: serverTimestamp()
+          lastSaved: Timestamp.fromMillis(Date.now())
         })
         // Draft updated successfully
         return data.id
       } else {
         // Create new draft
         // Creating new draft document
-        draftData.createdAt = serverTimestamp() as Timestamp
+        draftData.createdAt = Timestamp.fromMillis(Date.now())
         const docRef = await addDoc(collection(db, this.COLLECTION_NAME), draftData)
         // New draft created
         return docRef.id
@@ -164,6 +265,91 @@ export class FirebaseDraftService {
       console.error('❌ Failed to save draft to Firebase:', error)
       console.error('Firebase error details:', error)
       throw new Error(`Failed to save draft: ${error}`)
+    }
+  }
+
+  /**
+   * Publish a creative (move from draft to published status)
+   */
+  static async publishCreative(draftId: string, user?: any): Promise<boolean> {
+    try {
+      const draftRef = doc(db, this.COLLECTION_NAME, draftId)
+      const draftSnap = await getDoc(draftRef)
+
+      if (!draftSnap.exists()) {
+        throw new Error('Draft not found')
+      }
+
+      const draftData = draftSnap.data() as FirebaseDraftData
+      const userData = user ? this.getUserData(user) : null
+
+      if (!userData) {
+        throw new Error('User information required for publishing')
+      }
+
+      // Create published version from current form data
+      const publishedVersion = {
+        formData: draftData.formData,
+        publishedAt: Timestamp.fromMillis(Date.now()),
+        publishedBy: {
+          email: userData.email,
+          name: userData.name
+        }
+      }
+
+      // Update the creative with published status
+      await updateDoc(draftRef, {
+        status: 'published',
+        publishedVersion,
+        lastSaved: Timestamp.fromMillis(Date.now()),
+        editHistory: [
+          ...(draftData.editHistory || []),
+          {
+            name: userData.name,
+            email: userData.email,
+            action: 'published',
+            timestamp: Timestamp.fromMillis(Date.now()),
+            details: 'Published creative'
+          }
+        ],
+        version: (draftData.version || 0) + 1
+      })
+
+      return true
+    } catch (error) {
+      console.error('Failed to publish creative:', error)
+      throw new Error(`Failed to publish creative: ${error}`)
+    }
+  }
+
+  /**
+   * Get user's drafts for specific creative ID
+   */
+  static async getUserDraftsForCreative(creativeId: string, userEmail: string): Promise<FirebaseDraftData[]> {
+    try {
+      const q = query(
+        collection(db, this.COLLECTION_NAME),
+        where('creativeId', '==', creativeId)
+      )
+
+      const querySnapshot = await getDocs(q)
+      const creatives: FirebaseDraftData[] = []
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data() as FirebaseDraftData
+        // Check if user has a draft for this creative
+        if (data.userDrafts && data.userDrafts[userEmail]) {
+          creatives.push({
+            id: doc.id,
+            ...data
+          })
+        }
+      })
+
+      return creatives
+    } catch (error) {
+      console.error('Failed to get user drafts for creative:', error)
+      return []
     }
   }
 
@@ -189,24 +375,24 @@ export class FirebaseDraftService {
   }
 
   /**
-   * Get all active drafts for a user (only draft status)
+   * Get all creatives for a user (drafts, saved, and published)
    */
   static async getAllDrafts(userId: string = 'anonymous'): Promise<FirebaseDraftData[]> {
     try {
-      // Simplified query to avoid needing a composite index
+      // Get all creatives for this user (drafts, saved, and published)
       const q = query(
         collection(db, this.COLLECTION_NAME),
-        where('userId', '==', userId),
-        where('status', '==', 'draft')
+        where('userId', '==', userId)
       )
-      
+
       const querySnapshot = await getDocs(q)
       const drafts: FirebaseDraftData[] = []
-      
+
       querySnapshot.forEach((doc) => {
         const data = doc.data()
-        // Only include documents with draft status or no status (legacy drafts)
-        if (data.status === 'draft' || !data.status) {
+
+        // Include all statuses: draft, saved, published, or no status (legacy drafts)
+        if (data.status === 'draft' || data.status === 'saved' || data.status === 'published' || !data.status) {
           drafts.push({
             id: doc.id,
             ...data
@@ -236,7 +422,7 @@ export class FirebaseDraftService {
       // Simply update status to deleted
       await updateDoc(draftRef, {
         status: 'deleted',
-        lastSaved: serverTimestamp()
+        lastSaved: Timestamp.fromMillis(Date.now())
       })
       
       return true

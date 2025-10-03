@@ -1,25 +1,26 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import NextImage from 'next/image'
-import { useDropzone } from 'react-dropzone'
-import { Upload, Sparkles, ChevronDown, Search, Plus, Check, X } from 'lucide-react'
+import { Sparkles, ChevronDown, Search, Plus, Check, X } from 'lucide-react'
 import { format, addDays } from 'date-fns'
+import { formatCT } from '@/lib/timezone-utils'
 import { useAIFields } from '@/hooks/useAIFields'
 import { useFirebaseDrafts } from '@/hooks/useFirebaseDrafts'
-import { FirebaseDraftData } from '@/lib/firebase-draft-service'
+import { FirebaseDraftData, FirebaseDraftService } from '@/lib/firebase-draft-service'
 import { firebaseAIService } from '@/lib/firebase-ai-service'
 import { useGoogleAuth } from '@/contexts/GoogleAuthContext'
+import { useGoogleSheetsData } from '@/hooks/useGoogleSheetsData'
 import { AIStatusIndicator } from '@/components/ai/AIStatusIndicator'
 import { useTagOptions } from '@/hooks/useTagOptions'
 import { toast } from 'sonner'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-// import { CreativeHistoryViewer } from '@/components/CreativeHistoryViewer'
+import { CreativeHistoryViewer } from '@/components/CreativeHistoryViewer'
 
 // shadcn/ui components
 import { Button } from '@/components/ui/button'
@@ -51,6 +52,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 // Form validation schema
 const formSchema = z.object({
@@ -416,13 +424,40 @@ function SearchableSelect({
   )
 }
 
-function SingleUploadContent() {
+function CreativeDetailsContent() {
   const { user } = useGoogleAuth()
+  const router = useRouter()
   const searchParams = useSearchParams()
   const editId = searchParams.get('edit')
   const resumeId = searchParams.get('resumeId')
   const fromGoogleSheets = searchParams.get('from') === 'google-sheets'
-  
+  const imageAssetId = searchParams.get('imageAssetId')
+  const draftId = searchParams.get('draftId')
+
+  // Get Google Sheets data to find the creative
+  const { data: sheetsData, isLoading: sheetsLoading, error: sheetsError } = useGoogleSheetsData()
+  const mergedCreatives = sheetsData?.mergedCreatives
+
+  console.log('Creative Details Debug:', {
+    imageAssetId,
+    fromGoogleSheets,
+    sheetsLoading,
+    sheetsError: sheetsError?.message,
+    sheetsData: !!sheetsData,
+    mergedCreativesCount: mergedCreatives?.length || 0,
+    mergedCreatives: mergedCreatives?.slice(0, 2), // Show first 2 for debugging
+    user: user?.email,
+    hasAccessToken: !!user?.access_token,
+    isAuthenticated: !!user
+  })
+
+  // Find the creative by imageAssetId
+  const selectedCreative = imageAssetId && mergedCreatives
+    ? mergedCreatives.find(creative => creative.imageAssetId === imageAssetId)
+    : null
+
+  console.log('Selected Creative:', selectedCreative)
+
   const [showImage, setShowImage] = useState(fromGoogleSheets)
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -431,7 +466,6 @@ function SingleUploadContent() {
   const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false)
   const [showClearFormConfirm, setShowClearFormConfirm] = useState(false)
   const [pendingAIMode, setPendingAIMode] = useState<'empty' | 'all' | null>(null)
-  const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null)
   const [loadingExistingData, setLoadingExistingData] = useState(false)
   const [currentFirebaseDocId, setCurrentFirebaseDocId] = useState<string | null>(null)
   const [currentStatus, setCurrentStatus] = useState<'draft' | 'saved'>('draft')
@@ -440,6 +474,14 @@ function SingleUploadContent() {
   // const [countdown, setCountdown] = useState(30) // Currently unused
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, string>>({})
   // const [creativeHistory, setCreativeHistory] = useState<CreativeHistoryEntry[]>([]) // For performance history
+
+  // Draft loading state
+  const [draftData, setDraftData] = useState<FirebaseDraftData | null>(null)
+  const [loadingDraft, setLoadingDraft] = useState(false)
+
+  // Pagination state for performance history
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
   
   // Helper function to handle AI suggestion acceptance
   const acceptAiSuggestion = async (fieldName: string, addNewTag: (label: string) => Promise<string>) => {
@@ -478,9 +520,9 @@ function SingleUploadContent() {
   const {
     saveDraft: saveFirebaseDraft,
     isOnline,
-  } = useFirebaseDrafts({ 
-    userId: user?.uid || 'anonymous',
-    enableRealTime: true 
+  } = useFirebaseDrafts({
+    userId: user?.email || 'anonymous',
+    enableRealTime: true
   })
   
   // AI fields tracking
@@ -545,29 +587,198 @@ function SingleUploadContent() {
     },
   })
 
-  // Dropzone
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    if (acceptedFiles.length > 0) {
-      const file = acceptedFiles[0]
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error('File size must be less than 10MB')
-        return
-      }
-      form.setValue('uploadedImage', file)
-      setUploadedImageFile(file)
-      const filenameWithoutExt = file.name.replace(/\.[^/.]+$/, '')
-      form.setValue('creativeFilename', filenameWithoutExt)
-      setImagePreviewUrl(URL.createObjectURL(file))
-      setShowImage(true)
-      setHasChanges(true)
-    }
-  }, [form])
+  // Populate form with creative data from selectedCreative
+  useEffect(() => {
+    console.log('useEffect triggered:', { fromGoogleSheets, selectedCreative: !!selectedCreative, sheetsLoading })
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp'] },
-    maxFiles: 1,
-  })
+    if (fromGoogleSheets && selectedCreative && !sheetsLoading) {
+      console.log('Populating form with creative data:', selectedCreative)
+
+      // Set the creative filename
+      form.setValue('creativeFilename', selectedCreative.imageAssetName)
+
+      // Set account and campaign names if available
+      if (selectedCreative.accountName) {
+        form.setValue('accountName', selectedCreative.accountName)
+      }
+      if (selectedCreative.campaignName) {
+        form.setValue('campaignName', selectedCreative.campaignName)
+      }
+
+      // Convert adSets data to performanceHistory format
+      if (selectedCreative.adSets && Array.isArray(selectedCreative.adSets)) {
+        const historyEntries = selectedCreative.adSets.map((adSet: any) => ({
+          date: adSet.date,
+          cost: adSet.cost || '0',
+          costPerWebsiteLead: adSet.costPerWebsiteLead || '0',
+          costPerLinkClick: adSet.costPerLinkClick || '0',
+          syncedAt: new Date().toISOString(),
+          dataSource: 'google-sheets'
+        }))
+
+        // Set the performance history in the form
+        form.setValue('performanceHistory', historyEntries)
+        console.log('Set performance history:', historyEntries)
+      }
+
+      setHasChanges(false) // Don't mark as changed when initially loading
+
+      // Reset pagination when new data loads
+      setCurrentPage(1)
+
+      // Show image if we have imageUrl
+      if (selectedCreative.imageUrl) {
+        setShowImage(true)
+        setImagePreviewUrl(selectedCreative.imageUrl)
+      }
+    }
+  }, [fromGoogleSheets, selectedCreative, sheetsLoading, form])
+
+  // Load draft data when draftId is provided
+  useEffect(() => {
+    const loadDraftData = async () => {
+      if (!draftId || !user?.email) return
+
+      try {
+        setLoadingDraft(true)
+        console.log('Loading draft data for draftId:', draftId)
+
+        const draft = await FirebaseDraftService.getDraft(draftId)
+        if (!draft) {
+          toast.error('Draft not found')
+          router.push('/my-drafts')
+          return
+        }
+
+        console.log('Draft loaded:', draft)
+        setDraftData(draft)
+        setCurrentFirebaseDocId(draftId)
+
+        // Get the user's specific draft data
+        const userDraft = draft.userDrafts?.[user.email]
+        if (!userDraft) {
+          toast.error('You do not have access to this draft')
+          router.push('/my-drafts')
+          return
+        }
+
+        // Set form data from user's draft
+        if (userDraft.formData) {
+          console.log('Populating form with draft data:', userDraft.formData)
+
+          // Populate all form fields from draft
+          Object.entries(userDraft.formData).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+              form.setValue(key as any, value)
+            }
+          })
+
+          // Set status and last saved
+          setCurrentStatus(draft.status === 'published' ? 'saved' : 'draft')
+          if (userDraft.lastSaved) {
+            setLastSaved(userDraft.lastSaved.toDate?.() || new Date(userDraft.lastSaved))
+          }
+        }
+
+        // Try to find the original Google Sheets creative for performance history and image
+        // Use priority-based matching to prevent wrong image selection
+        if (sheetsData?.mergedCreatives) {
+          let originalCreative = null
+
+          // Priority 1: Exact image URL match (highest confidence)
+          if (draft.imageUrl) {
+            originalCreative = sheetsData.mergedCreatives.find(creative =>
+              creative.imageUrl === draft.imageUrl
+            )
+          }
+
+          // Priority 2: Campaign name + filename + account match (high confidence)
+          if (!originalCreative && userDraft.formData?.campaignName && userDraft.formData?.creativeFilename && userDraft.formData?.accountName) {
+            originalCreative = sheetsData.mergedCreatives.find(creative =>
+              creative.campaignName === userDraft.formData.campaignName &&
+              creative.imageAssetName === userDraft.formData.creativeFilename &&
+              creative.accountName === userDraft.formData.accountName
+            )
+          }
+
+          // Priority 3: Campaign name + filename match (medium confidence)
+          if (!originalCreative && userDraft.formData?.campaignName && userDraft.formData?.creativeFilename) {
+            originalCreative = sheetsData.mergedCreatives.find(creative =>
+              creative.campaignName === userDraft.formData.campaignName &&
+              creative.imageAssetName === userDraft.formData.creativeFilename
+            )
+          }
+
+          // Priority 4: Filename + account match (low confidence, last resort)
+          if (!originalCreative && draft.creativeFilename && userDraft.formData?.accountName) {
+            const candidates = sheetsData.mergedCreatives.filter(creative =>
+              creative.imageAssetName === draft.creativeFilename &&
+              creative.accountName === userDraft.formData.accountName
+            )
+            // If multiple matches, prefer the one with matching campaign if available
+            if (candidates.length > 1 && userDraft.formData?.campaignName) {
+              originalCreative = candidates.find(creative =>
+                creative.campaignName === userDraft.formData.campaignName
+              ) || candidates[0]
+            } else {
+              originalCreative = candidates[0] || null
+            }
+          }
+
+          if (originalCreative) {
+            console.log('Found original Google Sheets creative:', originalCreative)
+
+            // Set the image preview from Google Sheets (this triggers the sidebar)
+            if (originalCreative.imageUrl) {
+              setImagePreviewUrl(originalCreative.imageUrl)
+              setShowImage(true)
+            }
+
+            // Convert adSets data to performanceHistory format for display
+            if (originalCreative.adSets && Array.isArray(originalCreative.adSets)) {
+              const performanceHistory = originalCreative.adSets.map((adSet: any) => ({
+                date: adSet.date || adSet.dateStart || new Date().toISOString().split('T')[0],
+                cost: adSet.cost?.toString() || '0',
+                costPerWebsiteLead: adSet.costPerWebsiteLead?.toString() || '0',
+                costPerLinkClick: adSet.costPerLinkClick?.toString() || '0',
+                dataSource: 'google-sheets' as const
+              }))
+
+              console.log('Setting performance history from Google Sheets:', performanceHistory)
+              form.setValue('performanceHistory', performanceHistory)
+            }
+          } else {
+            console.log('No matching Google Sheets creative found for draft')
+            // Still set image preview from draft if available
+            if (draft.imageUrl) {
+              setImagePreviewUrl(draft.imageUrl)
+              setShowImage(true)
+            }
+          }
+        } else {
+          // Sheets data not loaded yet, set image from draft
+          if (draft.imageUrl) {
+            setImagePreviewUrl(draft.imageUrl)
+            setShowImage(true)
+          }
+        }
+
+      } catch (error) {
+        console.error('Error loading draft:', error)
+        toast.error('Failed to load draft')
+        router.push('/my-drafts')
+      } finally {
+        setLoadingDraft(false)
+      }
+    }
+
+    loadDraftData()
+  }, [draftId, user?.email, form, router, sheetsData])
+
+  // Reset to page 1 when items per page changes for performance history
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [itemsPerPage])
 
   // AI Autopopulate - Now based on Google Sheets data
   const executeAIAutopopulate = async (mode: 'empty' | 'all') => {
@@ -634,8 +845,7 @@ function SingleUploadContent() {
         }
       }
 
-      // Auto-fill designer with logged-in user's email or name
-      const currentUser = user?.email?.split('@')[0] || user?.displayName || 'unknown'
+      // Designer field is excluded from auto-population
       
       // Apply AI values - Fill everything except dates
       // Always fill filename if not set
@@ -643,8 +853,7 @@ function SingleUploadContent() {
         setField('creativeFilename', validatedAnalysis.creativeFilename || `creative-${Date.now()}`, true)
       }
       
-      // Always set designer to current user
-      setField('designer', currentUser, true, designerOptions)
+      // Designer field completely excluded from AI auto-population
       
       // Skip dates when from Google Sheets
       if (!fromGoogleSheets) {
@@ -724,12 +933,8 @@ function SingleUploadContent() {
       setField('disclaimer', validatedAnalysis.disclaimer ?? false, true)
       setField('conditionsListed', validatedAnalysis.conditionsListed ?? false, true)
       
-      // Additional fields - Only fill if in 'all' mode
-      if (mode === 'all') {
-        setField('designerRemarks', 'AI analyzed creative', true)
-        setField('internalNotes', 'Auto-populated by AI', true)
-        setField('uploadGoogleDocLink', '', true)
-      }
+      // Additional fields - Skip these fields from AI auto-population
+      // designerRemarks, internalNotes, uploadGoogleDocLink - excluded from AI
       setField('pinNoteForStrategySync', false, true)
 
       // Set suggestions for fields that couldn't be filled
@@ -748,20 +953,7 @@ function SingleUploadContent() {
       console.log('Empty fields check:')
       
       // Recheck and fill ALL empty fields
-      if (!checkValues.designer) {
-        console.log('  - Designer is empty, checking if currentUser exists in options:', currentUser)
-        // Check if currentUser exists in designer options
-        const exists = designerOptions.some(opt => opt.value === currentUser || opt.label.toLowerCase() === currentUser.toLowerCase())
-        if (exists) {
-          form.setValue('designer', currentUser)
-          markFieldAsAI('designer')
-          recheckFields.push('Designer')
-        } else {
-          // Add as suggestion instead of setting directly
-          console.log('  - Adding designer as suggestion:', currentUser)
-          newSuggestions['designer'] = currentUser
-        }
-      }
+      // Designer field excluded from auto-population
       if (!checkValues.litigationName) {
         const defaultLitigation = 'Pest Control' // Common default
         console.log('  - Litigation Name is empty, filling with:', defaultLitigation)
@@ -927,7 +1119,20 @@ function SingleUploadContent() {
         aiPopulatedFields: Array.from(aiFieldsSet)
       }
 
-      const docId = await saveFirebaseDraft(draftData, uploadedImageFile || undefined)
+      console.log('Auto-save attempt:', {
+        hasExistingId: !!currentFirebaseDocId,
+        currentId: currentFirebaseDocId,
+        filename: form.getValues('creativeFilename'),
+        willUpdate: !!currentFirebaseDocId
+      })
+
+      const docId = await saveFirebaseDraft(draftData, undefined, user)
+      
+      console.log('Auto-save result:', {
+        returnedId: docId,
+        wasUpdate: docId === currentFirebaseDocId,
+        wasNewCreate: docId !== currentFirebaseDocId
+      })
       
       if (docId) {
         setCurrentFirebaseDocId(docId)
@@ -945,44 +1150,50 @@ function SingleUploadContent() {
     setIsSubmitting(true)
     try {
       const isEditing = !!editId
-      
+
       // Get form data and exclude performance history if from Google Sheets
       const formDataToSave = { ...form.getValues() }
       if (fromGoogleSheets) {
         // Don't save performance history when coming from Google Sheets
         delete formDataToSave.performanceHistory
       }
-      
+
       // Save creative with 'saved' status
       const finalData: Partial<FirebaseDraftData> = {
         id: currentFirebaseDocId || undefined,
         creativeFilename: data.creativeFilename || `creative-${Date.now()}`,
         status: 'saved', // Mark as saved, not draft
+        imageUrl: imagePreviewUrl || undefined, // Save the correct image URL
         formData: formDataToSave,
         aiPopulatedFields: Array.from(aiFieldsSet)
       }
-      
+
       // Save with 'saved' status
-      const docId = await saveFirebaseDraft(finalData, uploadedImageFile || undefined)
-      
+      const docId = await saveFirebaseDraft(finalData, undefined, user)
+
       if (docId) {
         setCurrentStatus('saved') // Update status to saved
         toast.success(isEditing ? 'Creative updated successfully!' : 'Creative saved successfully! Status: Saved')
-        
+
         // Update the current doc ID if this was a new save
         if (!currentFirebaseDocId) {
           setCurrentFirebaseDocId(docId)
         }
+
+        // Redirect to creative library after successful save
+        setTimeout(() => {
+          router.push('/creative-library')
+        }, 1500) // Give time for user to see the success message
+
       } else {
         throw new Error('Failed to save creative')
       }
-      
+
       // Only reset form if not editing
       if (!isEditing) {
         form.reset()
         setShowImage(false)
         setImagePreviewUrl(null)
-        setUploadedImageFile(null)
       }
       setCurrentFirebaseDocId(null)
       setCurrentStatus('draft') // Reset status for new form
@@ -991,6 +1202,87 @@ function SingleUploadContent() {
     } catch (error) {
       console.error('Save error:', error)
       toast.error('Failed to save creative')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Form submission - Publish creative
+  const handlePublish = async () => {
+    setIsSubmitting(true)
+    try {
+      const isEditing = !!editId
+
+      // Get form data and exclude performance history if from Google Sheets
+      const formDataToSave = { ...form.getValues() }
+      if (fromGoogleSheets) {
+        // Don't save performance history when coming from Google Sheets
+        delete formDataToSave.performanceHistory
+      }
+
+      // Publish creative with 'published' status
+      const finalData: Partial<FirebaseDraftData> = {
+        id: currentFirebaseDocId || undefined,
+        creativeFilename: formDataToSave.creativeFilename || `creative-${Date.now()}`,
+        status: 'published', // Mark as published
+        imageUrl: imagePreviewUrl || undefined, // Save the correct image URL
+        formData: formDataToSave,
+        aiPopulatedFields: Array.from(aiFieldsSet),
+        // Add publishedVersion data
+        publishedVersion: {
+          formData: formDataToSave,
+          publishedAt: new Date() as any,
+          publishedBy: {
+            email: user?.email || 'unknown',
+            name: user?.name || 'Unknown User'
+          }
+        },
+        // Update edit history
+        editHistory: [
+          ...(draftData?.editHistory || []),
+          {
+            name: user?.name || 'User',
+            email: user?.email || 'unknown',
+            action: 'published' as const,
+            timestamp: new Date() as any,
+            details: 'Creative published to Creative Library'
+          }
+        ]
+      }
+
+      // Save with 'published' status
+      const docId = await saveFirebaseDraft(finalData, undefined, user)
+
+      if (docId) {
+        setCurrentStatus('published' as any) // Update status to published
+        toast.success('Creative published successfully! Now available in Creative Library')
+
+        // Update the current doc ID if this was a new save
+        if (!currentFirebaseDocId) {
+          setCurrentFirebaseDocId(docId)
+        }
+
+        // Redirect to creative library after successful publish
+        setTimeout(() => {
+          router.push('/creative-library')
+        }, 1500) // Give time for user to see the success message
+
+      } else {
+        throw new Error('Failed to publish creative')
+      }
+
+      // Only reset form if not editing
+      if (!isEditing) {
+        form.reset()
+        setShowImage(false)
+        setImagePreviewUrl(null)
+      }
+      setCurrentFirebaseDocId(null)
+      clearAllAITags()
+      setAiSuggestions({})
+    } catch (error) {
+      console.error('Publish error:', error)
+      toast.error('Failed to publish creative')
     } finally {
       setIsSubmitting(false)
     }
@@ -1078,10 +1370,7 @@ function SingleUploadContent() {
                 form.setValue('campaignName', data.campaignName)
               }
               
-              // Set designer to current user's name
-              if (user?.name) {
-                form.setValue('designer', user.name)
-              }
+              // Designer field excluded from auto-population
               
               toast.success('Creative loaded from Google Sheets')
             } else {
@@ -1165,8 +1454,8 @@ function SingleUploadContent() {
     loadExistingData()
   }, [editId, resumeId, user, form, markFieldAsAI])
 
-  // Show loading state while fetching existing data
-  if (loadingExistingData) {
+  // Show loading state while fetching existing data, Google Sheets data, or draft data
+  if (loadingExistingData || (fromGoogleSheets && sheetsLoading) || loadingDraft) {
     return (
       <>
         <div className="min-h-screen bg-gray-50 p-6">
@@ -1185,45 +1474,7 @@ function SingleUploadContent() {
     )
   }
 
-  // Image upload section - skip if coming from Google Sheets
-  if (!showImage && !fromGoogleSheets) {
-    return (
-      <div className="mx-auto py-8 max-w-4xl container">
-        <Card>
-          <CardHeader>
-            <CardTitle>Upload Creative</CardTitle>
-            <CardDescription>
-              Upload an image to analyze or skip to enter details manually
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div
-              {...getRootProps()}
-              className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors ${
-                isDragActive ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-gray-400'
-              }`}
-            >
-              <input {...getInputProps()} />
-              <Upload className="mx-auto mb-4 w-12 h-12 text-gray-400" />
-              {isDragActive ? (
-                <p className="text-lg">Drop the image here</p>
-              ) : (
-                <>
-                  <p className="mb-2 text-lg">Drag & drop an image here, or click to select</p>
-                  <p className="text-gray-500 text-sm">PNG, JPG, JPEG, GIF, WEBP up to 10MB</p>
-                </>
-              )}
-            </div>
-            <div className="flex justify-center mt-6">
-              <Button variant="outline" onClick={() => setShowImage(true)}>
-                Skip Image Upload
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+  // Skip image upload section - go directly to main form
 
   // Main form
   return (
@@ -1231,8 +1482,8 @@ function SingleUploadContent() {
       <div className="min-h-screen">
         <div className="flex">
           {/* Sidebar */}
-          {showImage && imagePreviewUrl && (
-            <div className="w-80 min-h-screen">
+          {(showImage && imagePreviewUrl) && (
+            <div className="w-96 min-h-screen">
               <div className="top-0 sticky bg-white shadow-lg p-6 border border-gray-200 rounded-2xl">
                 {/* Square image container with magnifying glass zoom */}
                 <div className="relative mb-4" style={{ overflow: 'visible' }}>
@@ -1288,18 +1539,11 @@ function SingleUploadContent() {
                     }}
                   />
                 </div>
-                <Button
-                  type="button"
-                  className="bg-yellow-400 hover:bg-yellow-500 mb-6 w-full font-medium text-black"
-                  onClick={() => document.getElementById('image-upload')?.click()}
-                >
-                  Replace Image
-                </Button>
-                <div className="space-y-2 text-sm">
+                <div className="space-y-2 text-sm mt-6">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Last Updated:</span>
                     <span className="text-gray-900">
-                      {lastSaved ? format(lastSaved, 'MMM d, h:mm a') : '—'}
+                      {lastSaved ? formatCT(lastSaved, 'MMM d, h:mm a') : '—'}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -1408,7 +1652,7 @@ function SingleUploadContent() {
 
           {/* Main Content */}
           <div className="flex-1 min-h-screen">
-            <div className="mx-auto px-8 max-w-6xl">
+            <div className="pl-6">
               {/* Action Bar */}
               <div className="top-0 z-10 sticky flex justify-between items-center bg-white shadow-lg mb-8 p-5 rounded-2xl">
                 <div className="flex items-center gap-4">
@@ -1457,7 +1701,7 @@ function SingleUploadContent() {
                     disabled={isSubmitting}
                     className="bg-blue-600 hover:bg-blue-700 text-white"
                   >
-                    {isSubmitting ? 'Uploading...' : 'Preview & Upload'}
+                    {isSubmitting ? 'Saving...' : 'Preview & Save'}
                   </Button>
                 </div>
               </div>
@@ -1500,24 +1744,16 @@ function SingleUploadContent() {
                         label="Designer" 
                         required 
                         isAIFilled={aiFieldsSet.has('designer')}
-                        aiSuggestion={!fromGoogleSheets ? aiSuggestions.designer : undefined}
-                        onAcceptSuggestion={!fromGoogleSheets ? () => acceptAiSuggestion('designer', addDesignerTag) : undefined}
-                        onDismissSuggestion={!fromGoogleSheets ? () => dismissAiSuggestion('designer') : undefined}
+                        aiSuggestion={aiSuggestions.designer}
+                        onAcceptSuggestion={() => acceptAiSuggestion('designer', addDesignerTag)}
+                        onDismissSuggestion={() => dismissAiSuggestion('designer')}
                       >
-                        {fromGoogleSheets ? (
-                          <Input 
-                            value={form.watch('designer')}
-                            readOnly
-                            className="bg-gray-50"
-                          />
-                        ) : (
-                          <SearchableSelect
-                            value={form.watch('designer')}
-                            onChange={(value) => form.setValue('designer', value as string)}
-                            placeholder="Select or type to add designer"
-                            fieldName="designer"
-                          />
-                        )}
+                        <SearchableSelect
+                          value={form.watch('designer')}
+                          onChange={(value) => form.setValue('designer', value as string)}
+                          placeholder="Select or type to add designer"
+                          fieldName="designer"
+                        />
                       </FormFieldWrapper>
                     </div>
 
@@ -1593,12 +1829,42 @@ function SingleUploadContent() {
                 {/* Performance Metrics */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Performance Metrics History</CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle>Performance Metrics History</CardTitle>
+
+                      {/* Show dropdown on far right */}
+                      {(fromGoogleSheets || (form.watch('performanceHistory')?.some(entry => entry.dataSource === 'google-sheets'))) && form.watch('performanceHistory')?.length > 0 && (
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <span>Show:</span>
+                          <Select value={itemsPerPage.toString()} onValueChange={(value) => setItemsPerPage(parseInt(value))}>
+                            <SelectTrigger className="w-20">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="5">5</SelectItem>
+                              <SelectItem value="10">10</SelectItem>
+                              <SelectItem value="20">20</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {(() => {
+                            const performanceHistory = form.watch('performanceHistory') || []
+                            const totalItems = performanceHistory.length
+                            return (
+                              <span className="ml-2">
+                                {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)}-{Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems.toLocaleString()}
+                              </span>
+                            )
+                          })()}
+                        </div>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent>
-                    {/* Display as read-only table when coming from Google Sheets */}
-                    {fromGoogleSheets && form.watch('performanceHistory')?.length > 0 ? (
-                      <div className="rounded-lg border">
+                    {/* Display as read-only table when coming from Google Sheets or when draft has Google Sheets performance history */}
+                    {(fromGoogleSheets || (form.watch('performanceHistory')?.some(entry => entry.dataSource === 'google-sheets'))) && form.watch('performanceHistory')?.length > 0 ? (
+                      <div>
+                        {/* Table container */}
+                        <div className="rounded-lg border">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -1606,33 +1872,115 @@ function SingleUploadContent() {
                               <TableHead className="text-xs">Total Spend</TableHead>
                               <TableHead className="text-xs">Cost Per Lead</TableHead>
                               <TableHead className="text-xs">Cost Per Click</TableHead>
-                              <TableHead className="text-xs">Source</TableHead>
+                              <TableHead className="text-xs">Leads</TableHead>
+                              <TableHead className="text-xs">Clicks</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {form.watch('performanceHistory')?.map((entry, index) => (
-                              <TableRow key={index}>
-                                <TableCell className="text-sm">
-                                  {new Date(entry.date).toLocaleDateString()}
-                                </TableCell>
-                                <TableCell className="text-sm">
-                                  ${parseFloat(entry.cost || '0').toFixed(2)}
-                                </TableCell>
-                                <TableCell className="text-sm">
-                                  ${parseFloat(entry.costPerWebsiteLead || '0').toFixed(2)}
-                                </TableCell>
-                                <TableCell className="text-sm">
-                                  ${parseFloat(entry.costPerLinkClick || '0').toFixed(2)}
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="secondary" className="text-xs">
-                                    Google Sheets
-                                  </Badge>
-                                </TableCell>
-                              </TableRow>
-                            ))}
+                            {(() => {
+                              const performanceHistory = form.watch('performanceHistory') || []
+                              const totalItems = performanceHistory.length
+                              const startIndex = (currentPage - 1) * itemsPerPage
+                              const endIndex = startIndex + itemsPerPage
+                              const currentItems = performanceHistory.slice(startIndex, endIndex)
+
+                              return currentItems.map((entry, index) => {
+                                const cost = parseFloat(entry.cost || '0');
+                                const cpl = parseFloat(entry.costPerWebsiteLead || '0');
+                                const cpc = parseFloat(entry.costPerLinkClick || '0');
+                                const leads = cpl > 0 ? Math.round(cost / cpl) : 0;
+                                const clicks = cpc > 0 ? Math.round(cost / cpc) : 0;
+
+                                return (
+                                  <TableRow key={startIndex + index}>
+                                    <TableCell className="text-sm">
+                                      {new Date(entry.date).toLocaleDateString()}
+                                    </TableCell>
+                                    <TableCell className="text-sm">
+                                      ${cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </TableCell>
+                                    <TableCell className="text-sm">
+                                      ${cpl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </TableCell>
+                                    <TableCell className="text-sm">
+                                      ${cpc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </TableCell>
+                                    <TableCell className="text-sm">
+                                      {leads}
+                                    </TableCell>
+                                    <TableCell className="text-sm">
+                                      {clicks}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })
+                            })()}
                           </TableBody>
                         </Table>
+                        </div>
+
+                        {/* Pagination Controls - Centered outside table */}
+                        {(() => {
+                          const performanceHistory = form.watch('performanceHistory') || []
+                          const totalItems = performanceHistory.length
+                          const totalPages = Math.ceil(totalItems / itemsPerPage)
+
+                          if (totalPages <= 1) return null
+
+                          return (
+                            <div className="flex justify-center mt-6">
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                  disabled={currentPage === 1}
+                                  className="px-3 py-1"
+                                >
+                                  Previous
+                                </Button>
+                                <div className="flex items-center gap-1">
+                                  {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                                    let pageNum
+                                    if (totalPages <= 5) {
+                                      pageNum = i + 1
+                                    } else if (currentPage <= 3) {
+                                      pageNum = i + 1
+                                    } else if (currentPage >= totalPages - 2) {
+                                      pageNum = totalPages - 4 + i
+                                    } else {
+                                      pageNum = currentPage - 2 + i
+                                    }
+
+                                    return (
+                                      <Button
+                                        key={pageNum}
+                                        type="button"
+                                        variant={currentPage === pageNum ? "default" : "outline"}
+                                        size="sm"
+                                        onClick={() => setCurrentPage(pageNum)}
+                                        className="px-3 py-1 min-w-8"
+                                      >
+                                        {pageNum}
+                                      </Button>
+                                    )
+                                  })}
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                  disabled={currentPage === totalPages}
+                                  className="px-3 py-1"
+                                >
+                                  Next
+                                </Button>
+                              </div>
+                            </div>
+                          )
+                        })()}
                       </div>
                     ) : !fromGoogleSheets ? (
                       <>
@@ -1880,15 +2228,62 @@ function SingleUploadContent() {
                       </FormFieldWrapper>
                     </div>
 
-                    <FormFieldWrapper label="Headline Tags" isAIFilled={aiFieldsSet.has('headlineTags')}>
-                      <SearchableSelect
-                        value={form.watch('headlineTags')}
-                        onChange={(value) => form.setValue('headlineTags', value as string[])}
-                        placeholder="Search or type to add tags"
-                        multiple
-                        fieldName="headlineTags"
-                      />
-                    </FormFieldWrapper>
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormFieldWrapper 
+                        label="CTA Style Group" 
+                        isAIFilled={aiFieldsSet.has('ctaStyleGroup')}
+                        aiSuggestion={aiSuggestions.ctaStyleGroup}
+                        onAcceptSuggestion={() => acceptAiSuggestion('ctaStyleGroup', addCtaStyleTag)}
+                        onDismissSuggestion={() => dismissAiSuggestion('ctaStyleGroup')}
+                      >
+                        <SearchableSelect
+                          value={form.watch('ctaStyleGroup') || ''}
+                          onChange={(value) => form.setValue('ctaStyleGroup', value as string)}
+                          placeholder="Search or type to add CTA style group"
+                          fieldName="ctaStyleGroup"
+                        />
+                      </FormFieldWrapper>
+                      <FormFieldWrapper 
+                        label="CTA Color" 
+                        isAIFilled={aiFieldsSet.has('ctaColor')}
+                        aiSuggestion={aiSuggestions.ctaColor}
+                        onAcceptSuggestion={() => acceptAiSuggestion('ctaColor', addCtaColorTag)}
+                        onDismissSuggestion={() => dismissAiSuggestion('ctaColor')}
+                      >
+                        <SearchableSelect
+                          value={form.watch('ctaColor') || ''}
+                          onChange={(value) => form.setValue('ctaColor', value as string)}
+                          placeholder="Search or type to add CTA color"
+                          fieldName="ctaColor"
+                        />
+                      </FormFieldWrapper>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormFieldWrapper 
+                        label="CTA Position" 
+                        isAIFilled={aiFieldsSet.has('ctaPosition')}
+                        aiSuggestion={aiSuggestions.ctaPosition}
+                        onAcceptSuggestion={() => acceptAiSuggestion('ctaPosition', addCtaPositionTag)}
+                        onDismissSuggestion={() => dismissAiSuggestion('ctaPosition')}
+                      >
+                        <SearchableSelect
+                          value={form.watch('ctaPosition') || ''}
+                          onChange={(value) => form.setValue('ctaPosition', value as string)}
+                          placeholder="Search or type to add CTA position"
+                          fieldName="ctaPosition"
+                        />
+                      </FormFieldWrapper>
+                      <FormFieldWrapper label="Headline Tags" isAIFilled={aiFieldsSet.has('headlineTags')}>
+                        <SearchableSelect
+                          value={form.watch('headlineTags')}
+                          onChange={(value) => form.setValue('headlineTags', value as string[])}
+                          placeholder="Search or type to add tags"
+                          multiple
+                          fieldName="headlineTags"
+                        />
+                      </FormFieldWrapper>
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -1998,7 +2393,7 @@ function SingleUploadContent() {
                 </Card>
 
                 {/* Additional Info */}
-                <Card>
+                <Card className="mb-8">
                   <CardHeader>
                     <CardTitle>Additional Information</CardTitle>
                   </CardHeader>
@@ -2018,6 +2413,8 @@ function SingleUploadContent() {
             </div>
           </div>
         </div>
+        
+        <div className="h-8"></div>
 
         {/* Confirmation Dialogs */}
         <Dialog open={showOverwriteConfirm} onOpenChange={setShowOverwriteConfirm}>
@@ -2069,7 +2466,7 @@ function SingleUploadContent() {
                   // Reset form to initial default values but keep image-related data
                   form.reset({
                     skipImage: false,
-                    uploadedImage: uploadedImageFile, // Keep the uploaded image
+                    // No uploaded image functionality
                     creativeFilename: currentFilename || '', // Keep the filename
                     dateAdded: format(new Date(), 'yyyy-MM-dd'),
                     designer: '',
@@ -2137,6 +2534,7 @@ function SingleUploadContent() {
           }}
           mode="preview"
           onSave={() => form.handleSubmit(handleSubmit)()}
+          onPublish={handlePublish}
           isSubmitting={isSubmitting}
           isFormValid={isFormValid()}
         />
@@ -2146,7 +2544,7 @@ function SingleUploadContent() {
 }
 
 // Loading component for Suspense
-function SingleUploadLoading() {
+function CreativeDetailsLoading() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-2xl">
@@ -2164,10 +2562,10 @@ function SingleUploadLoading() {
 }
 
 // Main export with Suspense wrapper
-export default function SingleUploadPage() {
+export default function CreativeDetailsPage() {
   return (
-    <Suspense fallback={<SingleUploadLoading />}>
-      <SingleUploadContent />
+    <Suspense fallback={<CreativeDetailsLoading />}>
+      <CreativeDetailsContent />
     </Suspense>
   )
 }

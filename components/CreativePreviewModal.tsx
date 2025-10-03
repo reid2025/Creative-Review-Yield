@@ -27,7 +27,7 @@ interface CreativeData {
   creativeFilename?: string
   imageUrl?: string
   dateAdded?: string
-  status?: 'draft' | 'saved'
+  status?: 'draft' | 'saved' | 'published'
   
   // Metadata & Dates
   startDate?: string
@@ -109,6 +109,7 @@ interface CreativePreviewModalProps {
   creativeData: CreativeData
   mode?: 'preview' | 'view' // preview = from upload form, view = from creatives page
   onSave?: () => void
+  onPublish?: () => void
   isSubmitting?: boolean
   isFormValid?: boolean
 }
@@ -119,6 +120,7 @@ export default function CreativePreviewModal({
   creativeData,
   mode = 'preview',
   onSave,
+  onPublish,
   isSubmitting = false,
   isFormValid = true
 }: CreativePreviewModalProps) {
@@ -173,297 +175,272 @@ export default function CreativePreviewModal({
           
           <TabsContent value="details" className="mt-4">
             <div className="flex gap-6" style={{ height: 'calc(75vh - 150px)' }}>
-          {/* Left Column - Image with Magnifying Glass */}
+          {/* Left Column - Image */}
           <div className="w-[45%]">
             {creativeData.imageUrl && (
-              <div className="h-full space-y-4 flex flex-col border rounded-lg bg-gray-50 p-6">
-                <h3 className="font-semibold text-base text-gray-700">Creative Image</h3>
-                <div className="bg-white rounded-lg p-4 relative overflow-visible">
-                  {/* Magnifying glass container - 2x bigger */}
-                  <div 
-                    className="magnifier absolute w-[300px] h-[300px] border-2 border-gray-400 rounded-full pointer-events-none hidden z-50 shadow-lg"
-                    style={{
-                      backgroundImage: `url(${creativeData.imageUrl})`,
-                      backgroundRepeat: 'no-repeat',
-                      backgroundSize: '350%',
-                    }}
+              <div className="h-full border rounded-lg bg-gray-50 p-6">
+                <div className="bg-white rounded-lg p-4 h-full">
+                  <NextImage
+                    src={creativeData.imageUrl}
+                    alt="Creative preview"
+                    className="w-full h-full object-contain rounded"
+                    width={600}
+                    height={600}
                   />
-                  
-                  {/* Image with hover detection */}
-                  <div
-                    className="relative rounded-lg cursor-crosshair"
-                    onMouseMove={(e) => {
-                      const rect = e.currentTarget.getBoundingClientRect()
-                      const parentRect = e.currentTarget.parentElement?.getBoundingClientRect()
-                      if (!parentRect) return
-                      
-                      const x = ((e.clientX - rect.left) / rect.width) * 100
-                      const y = ((e.clientY - rect.top) / rect.height) * 100
-                      const magnifier = e.currentTarget.parentElement?.querySelector('.magnifier') as HTMLElement
-                      if (magnifier) {
-                        magnifier.style.backgroundPosition = `${x}% ${y}%`
-                        
-                        // Position magnifier at cursor, allow it to go outside image bounds
-                        let left = e.clientX - parentRect.left - 150 // Center on cursor (300px/2)
-                        let top = e.clientY - parentRect.top - 150 // Center on cursor (300px/2)
-                        
-                        // Allow magnifier to go outside but keep it visible in viewport
-                        left = Math.max(-150, Math.min(left, parentRect.width - 150))
-                        top = Math.max(-150, Math.min(top, parentRect.height - 150))
-                        
-                        magnifier.style.left = `${left}px`
-                        magnifier.style.top = `${top}px`
-                        magnifier.style.display = 'block'
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      const magnifier = e.currentTarget.parentElement?.querySelector('.magnifier') as HTMLElement
-                      if (magnifier) {
-                        magnifier.style.display = 'none'
-                      }
-                    }}
-                  >
-                    <NextImage
-                      src={creativeData.imageUrl}
-                      alt="Creative preview"
-                      className="w-full h-full object-contain rounded"
-                      width={600}
-                      height={600}
-                    />
-                  </div>
-                </div>
-                <div className="text-sm text-gray-600 space-y-2">
-                  <div><span className="font-semibold">Filename:</span> {creativeData.creativeFilename || 'N/A'}</div>
-                  <div><span className="font-semibold">Date Added:</span> {creativeData.dateAdded || 'N/A'}</div>
                 </div>
               </div>
             )}
           </div>
           
-          {/* Right Column - ALL Form Data */}
-          <div className="flex-1 overflow-y-auto pr-3">
-            <div className="space-y-3">
-              {/* Metadata & Dates */}
-              <div className="p-3 border rounded-lg bg-gray-50">
-                <h3 className="mb-2 font-semibold text-sm text-gray-800 border-b pb-1">Metadata & Dates</h3>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  <div>
-                    <span className="text-gray-600">Start Date:</span>
-                    <span className="font-medium ml-2">{creativeData.startDate || 'N/A'}</span>
+          {/* Right Column - Form Summary matching exact form structure */}
+          <div className="flex-1 overflow-y-auto pr-2">
+            <div className="space-y-4 pb-8">
+              
+              {/* 1. Metadata & Campaign Info */}
+              <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                <h3 className="font-semibold text-base text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="w-1 h-4 bg-blue-500 rounded"></div>
+                  Metadata & Campaign Info
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Creative Filename</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.creativeFilename || 'N/A'}</span>
                   </div>
-                  <div>
-                    <span className="text-gray-600">End Date:</span>
-                    <span className="font-medium ml-2">{creativeData.endDate || 'N/A'}</span>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Date Added</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.dateAdded || 'N/A'}</span>
                   </div>
-                  <div>
-                    <span className="text-gray-600">Designer:</span>
-                    <span className="font-medium ml-2">{creativeData.designer || 'N/A'}</span>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Account Name</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.accountName || 'N/A'}</span>
                   </div>
-                  <div>
-                    <span className="text-gray-600">Date Added:</span>
-                    <span className="font-medium ml-2">{creativeData.dateAdded || 'N/A'}</span>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Designer</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.designer || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Litigation Name</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.litigationName || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Campaign Type</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.campaignType || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Start Date</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.startDate || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">End Date</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.endDate || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Campaign Name</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.campaignName || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Marked as Top Ad</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.markedAsTopAd ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className="flex items-center py-2">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Needs Optimization</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.needsOptimization ? 'Yes' : 'No'}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Campaign Info */}
-              <div className="p-3 border rounded-lg bg-gray-50">
-                <h3 className="mb-2 font-semibold text-sm text-gray-800 border-b pb-1">Campaign Information</h3>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  <div>
-                    <span className="text-gray-600">Litigation:</span>
-                    <span className="font-medium ml-2">{creativeData.litigationName || 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Campaign:</span>
-                    <span className="font-medium ml-2">{creativeData.campaignType || 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Layout:</span>
-                    <span className="font-medium ml-2">{creativeData.creativeLayoutType || 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Messaging:</span>
-                    <span className="font-medium ml-2">{creativeData.messagingStructure || 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Audience:</span>
-                    <span className="font-medium ml-2">{creativeData.audiencePersona || 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Trigger:</span>
-                    <span className="font-medium ml-2">{creativeData.campaignTrigger || 'N/A'}</span>
-                  </div>
-                </div>
-              </div>
 
-              {/* Headlines & CTA */}
-              <div className="p-3 border rounded-lg bg-gray-50 col-span-2">
-                <h3 className="mb-2 font-semibold text-sm text-gray-800 border-b pb-1">Headlines & CTA</h3>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  <div><span className="text-gray-600">Pre-headline:</span> <span className="font-medium">{creativeData.preheadlineText || 'N/A'}</span></div>
-                  <div><span className="text-gray-600">Headline:</span> <span className="font-medium">{creativeData.headlineText || 'N/A'}</span></div>
-                  <div><span className="text-gray-600">CTA Label:</span> <span className="font-medium">{creativeData.ctaLabel || 'N/A'}</span></div>
-                  <div><span className="text-gray-600">CTA Verb:</span> <span className="font-medium">{creativeData.ctaVerb || 'N/A'}</span></div>
-                  <div><span className="text-gray-600">CTA Style:</span> <span className="font-medium">{creativeData.ctaStyleGroup || 'N/A'}</span></div>
-                  <div><span className="text-gray-600">CTA Color:</span> <span className="font-medium">{creativeData.ctaColor || 'N/A'}</span></div>
-                  <div><span className="text-gray-600">CTA Position:</span> <span className="font-medium">{creativeData.ctaPosition || 'N/A'}</span></div>
-                </div>
-              </div>
-
-              {/* Visual Elements */}
-              <div className="p-3 border rounded-lg bg-gray-50">
-                <h3 className="mb-2 font-semibold text-sm text-gray-800 border-b pb-1">Visual Elements</h3>
-                <div className="space-y-2 text-sm">
-                  <div>
-                    <span className="text-gray-600">Imagery Type:</span>
-                    {creativeData.imageryType?.length ? (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {creativeData.imageryType.map((type: string) => (
-                          <Badge key={type} variant="secondary" className="text-xs">{type}</Badge>
-                        ))}
-                      </div>
-                    ) : ' N/A'}
+              {/* 2. Message & Targeting Insights */}
+              <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                <h3 className="font-semibold text-base text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="w-1 h-4 bg-purple-500 rounded"></div>
+                  Message & Targeting Insights
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Creative Layout Type</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.creativeLayoutType || 'N/A'}</span>
                   </div>
-                  <div>
-                    <span className="text-gray-600">Background:</span>
-                    {creativeData.imageryBackground?.length ? (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {creativeData.imageryBackground.map((bg: string) => (
-                          <Badge key={bg} variant="secondary" className="text-xs">{bg}</Badge>
-                        ))}
-                      </div>
-                    ) : ' N/A'}
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Messaging Structure</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.messagingStructure || 'N/A'}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 mt-2">
-                    <div className="text-center">
-                      <div className="text-gray-600">Question-Based</div>
-                      <Badge variant={creativeData.questionBasedHeadline ? 'default' : 'outline'} className="text-sm">
-                        {creativeData.questionBasedHeadline ? 'Yes' : 'No'}
-                      </Badge>
+                  <div className="flex items-start py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Imagery Type</span>
+                    <div className="flex-1">
+                      {creativeData.imageryType?.length ? (
+                        <div className="flex flex-wrap gap-1">
+                          {creativeData.imageryType.map((type: string) => (
+                            <Badge key={type} variant="secondary" className="text-xs">{type}</Badge>
+                          ))}
+                        </div>
+                      ) : <span className="text-sm text-gray-900 font-semibold">N/A</span>}
                     </div>
-                    <div className="text-center">
-                      <div className="text-gray-600">Client Brand</div>
-                      <Badge variant={creativeData.clientBranding ? 'default' : 'outline'} className="text-sm">
-                        {creativeData.clientBranding ? 'Yes' : 'No'}
-                      </Badge>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-gray-600">Icons Used</div>
-                      <Badge variant={creativeData.iconsUsed ? 'default' : 'outline'} className="text-sm">
-                        {creativeData.iconsUsed ? 'Yes' : 'No'}
-                      </Badge>
+                  </div>
+                  <div className="flex items-start py-2">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Imagery Background</span>
+                    <div className="flex-1">
+                      {creativeData.imageryBackground?.length ? (
+                        <div className="flex flex-wrap gap-1">
+                          {creativeData.imageryBackground.map((bg: string) => (
+                            <Badge key={bg} variant="secondary" className="text-xs">{bg}</Badge>
+                          ))}
+                        </div>
+                      ) : <span className="text-sm text-gray-900 font-semibold">N/A</span>}
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Copy Elements */}
-              <div className="p-3 border rounded-lg bg-gray-50">
-                <h3 className="mb-2 font-semibold text-sm text-gray-800 border-b pb-1">Copy Elements</h3>
-                <div className="space-y-1.5 text-sm">
-                  <div><span className="text-gray-600">Body Copy:</span> <span className="font-medium">{creativeData.bodyCopySummary || 'N/A'}</span></div>
-                  <div>
-                    <span className="text-gray-600">Copy Angle:</span>
-                    {creativeData.copyAngle?.length ? (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {creativeData.copyAngle.map((angle: string) => (
-                          <Badge key={angle} variant="secondary" className="text-xs">{angle}</Badge>
-                        ))}
-                      </div>
-                    ) : ' N/A'}
+              {/* 3. Headline & CTA */}
+              <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                <h3 className="font-semibold text-base text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="w-1 h-4 bg-orange-500 rounded"></div>
+                  Headline & CTA
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Preheadline Text</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.preheadlineText || 'N/A'}</span>
                   </div>
-                  <div>
-                    <span className="text-gray-600">Copy Tone:</span>
-                    {creativeData.copyTone?.length ? (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {creativeData.copyTone.map((tone: string) => (
-                          <Badge key={tone} variant="secondary" className="text-xs">{tone}</Badge>
-                        ))}
-                      </div>
-                    ) : ' N/A'}
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Headline Text</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.headlineText || 'N/A'}</span>
                   </div>
-                  <div>
-                    <span className="text-gray-600">Headline Tags:</span>
-                    {creativeData.headlineTags?.length ? (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {creativeData.headlineTags.map((tag: string) => (
-                          <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
-                        ))}
-                      </div>
-                    ) : ' N/A'}
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">CTA Label</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.ctaLabel || 'N/A'}</span>
                   </div>
-                  <div>
-                    <span className="text-gray-600">Headline Intent:</span>
-                    {creativeData.headlineIntent?.length ? (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {creativeData.headlineIntent.map((intent: string) => (
-                          <Badge key={intent} variant="secondary" className="text-xs">{intent}</Badge>
-                        ))}
-                      </div>
-                    ) : ' N/A'}
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">CTA Verb</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.ctaVerb || 'N/A'}</span>
                   </div>
-                </div>
-              </div>
-
-              {/* Content Flags */}
-              <div className="p-3 border rounded-lg bg-gray-50 col-span-2">
-                <h3 className="mb-2 font-semibold text-sm text-gray-800 border-b pb-1">Content Flags</h3>
-                <div className="grid grid-cols-6 gap-2 text-sm">
-                  <div className="text-center">
-                    <div className="text-gray-600">Legal Lang</div>
-                    <Badge variant={creativeData.legalLanguage ? 'default' : 'outline'} className="text-sm">
-                      {creativeData.legalLanguage ? 'Yes' : 'No'}
-                    </Badge>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">CTA Style Group</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.ctaStyleGroup || 'N/A'}</span>
                   </div>
-                  <div className="text-center">
-                    <div className="text-gray-600">Emotional</div>
-                    <Badge variant={creativeData.emotionalStatement ? 'default' : 'outline'} className="text-sm">
-                      {creativeData.emotionalStatement ? 'Yes' : 'No'}
-                    </Badge>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">CTA Color</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.ctaColor || 'N/A'}</span>
                   </div>
-                  <div className="text-center">
-                    <div className="text-gray-600">Dollar Amt</div>
-                    <Badge variant={creativeData.dollarAmount ? 'default' : 'outline'} className="text-sm">
-                      {creativeData.dollarAmount ? 'Yes' : 'No'}
-                    </Badge>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">CTA Position</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.ctaPosition || 'N/A'}</span>
                   </div>
-                  <div className="text-center">
-                    <div className="text-gray-600">Stats</div>
-                    <Badge variant={creativeData.statMentioned ? 'default' : 'outline'} className="text-sm">
-                      {creativeData.statMentioned ? 'Yes' : 'No'}
-                    </Badge>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-gray-600">Disclaimer</div>
-                    <Badge variant={creativeData.disclaimer ? 'default' : 'outline'} className="text-sm">
-                      {creativeData.disclaimer ? 'Yes' : 'No'}
-                    </Badge>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-gray-600">Conditions</div>
-                    <Badge variant={creativeData.conditionsListed ? 'default' : 'outline'} className="text-sm">
-                      {creativeData.conditionsListed ? 'Yes' : 'No'}
-                    </Badge>
+                  <div className="flex items-start py-2">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Headline Tags</span>
+                    <div className="flex-1">
+                      {creativeData.headlineTags?.length ? (
+                        <div className="flex flex-wrap gap-1">
+                          {creativeData.headlineTags.map((tag: string) => (
+                            <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
+                          ))}
+                        </div>
+                      ) : <span className="text-sm text-gray-900 font-semibold">N/A</span>}
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Performance Metrics */}
-              <div className="p-3 border rounded-lg bg-gray-50 col-span-2">
-                <h3 className="mb-2 font-semibold text-sm text-gray-800 border-b pb-1">Performance Metrics</h3>
-                <div className="grid grid-cols-3 gap-3 text-sm">
-                  <div className="text-center p-2 bg-gray-50 rounded">
-                    <div className="text-xs text-gray-600">Spent</div>
-                    <div className="font-bold">${creativeData.amountSpent || '0'}</div>
+              {/* 4. Copy Drivers & Content Elements */}
+              <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                <h3 className="font-semibold text-base text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="w-1 h-4 bg-red-500 rounded"></div>
+                  Copy Drivers & Content Elements
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Body Copy Summary</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.bodyCopySummary || 'N/A'}</span>
                   </div>
-                  <div className="text-center p-2 bg-gray-50 rounded">
-                    <div className="text-xs text-gray-600">CPL</div>
-                    <div className="font-bold">${creativeData.costPerWebsiteLead || '0'}</div>
+                  <div className="flex items-start py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Copy Angle</span>
+                    <div className="flex-1">
+                      {creativeData.copyAngle?.length ? (
+                        <div className="flex flex-wrap gap-1">
+                          {creativeData.copyAngle.map((angle: string) => (
+                            <Badge key={angle} variant="secondary" className="text-xs">{angle}</Badge>
+                          ))}
+                        </div>
+                      ) : <span className="text-sm text-gray-900 font-semibold">N/A</span>}
+                    </div>
                   </div>
-                  <div className="text-center p-2 bg-gray-50 rounded">
-                    <div className="text-xs text-gray-600">CPC</div>
-                    <div className="font-bold">${creativeData.costPerClick || '0'}</div>
+                  <div className="flex items-start py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Copy Tone</span>
+                    <div className="flex-1">
+                      {creativeData.copyTone?.length ? (
+                        <div className="flex flex-wrap gap-1">
+                          {creativeData.copyTone.map((tone: string) => (
+                            <Badge key={tone} variant="secondary" className="text-xs">{tone}</Badge>
+                          ))}
+                        </div>
+                      ) : <span className="text-sm text-gray-900 font-semibold">N/A</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Legal Language</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.legalLanguage ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Emotional Statement</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.emotionalStatement ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Dollar Amount</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.dollarAmount ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Statistics Mentioned</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.statMentioned ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Disclaimer</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.disclaimer ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Conditions Listed</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.conditionsListed ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Question-Based Headline</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.questionBasedHeadline ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className="flex items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Client Branding</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.clientBranding ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className="flex items-center py-2">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Icons Used</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.iconsUsed ? 'Yes' : 'No'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 5. Additional Information */}
+              <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm" style={{marginBottom: '30px'}}>
+                <h3 className="font-semibold text-base text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="w-1 h-4 bg-gray-400 rounded"></div>
+                  Additional Information
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex items-center py-2 border-b border-gray-200">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Designer Remarks</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.designerRemarks || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center py-2 border-b border-gray-200">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Internal Notes</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">{creativeData.internalNotes || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center py-2">
+                    <span className="text-sm text-gray-600 font-medium w-1/3">Google Doc Link</span>
+                    <span className="text-sm text-gray-900 font-semibold flex-1">
+                      {creativeData.uploadGoogleDocLink ? (
+                        <a href={creativeData.uploadGoogleDocLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                          {creativeData.uploadGoogleDocLink}
+                        </a>
+                      ) : 'N/A'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -550,18 +527,8 @@ export default function CreativePreviewModal({
                 Back to Edit
               </Button>
               <div className="flex gap-2">
-                {creativeData.status === 'draft' && (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      onOpenChange(false)
-                      toast.info('Creative remains as draft')
-                    }}
-                  >
-                    Keep as Draft
-                  </Button>
-                )}
                 <Button
+                  variant="outline"
                   onClick={() => {
                     if (creativeData.status === 'saved') {
                       onOpenChange(false)
@@ -574,12 +541,30 @@ export default function CreativePreviewModal({
                     }
                   }}
                   disabled={isSubmitting || creativeData.status === 'saved' || !isFormValid}
-                  className={creativeData.status === 'saved' ? 'bg-gray-600' : !isFormValid ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700 text-white'}
                   title={!isFormValid ? 'Complete all required fields to save' : ''}
                 >
                   <Save className="mr-2 h-4 w-4" />
-                  {isSubmitting ? 'Saving...' : creativeData.status === 'saved' ? 'Already Saved' : !isFormValid ? 'Form Incomplete' : 'Save as Final'}
+                  {isSubmitting ? 'Saving...' : creativeData.status === 'saved' ? 'Already Saved' : !isFormValid ? 'Form Incomplete' : 'Save as Draft'}
                 </Button>
+
+                {onPublish && (
+                  <Button
+                    onClick={() => {
+                      if (!isFormValid) {
+                        toast.error('Please complete all required fields before publishing')
+                      } else {
+                        onOpenChange(false)
+                        onPublish()
+                      }
+                    }}
+                    disabled={isSubmitting || !isFormValid}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                    title={!isFormValid ? 'Complete all required fields to publish' : ''}
+                  >
+                    <FileText className="mr-2 h-4 w-4" />
+                    {isSubmitting ? 'Publishing...' : 'Publish Creative'}
+                  </Button>
+                )}
               </div>
             </>
           ) : (

@@ -12,7 +12,8 @@ export interface UseFirebaseDraftsReturn {
   drafts: FirebaseDraftData[]
   isLoading: boolean
   error: string | null
-  saveDraft: (data: Partial<FirebaseDraftData>, imageFile?: File) => Promise<string | null>
+  saveDraft: (data: Partial<FirebaseDraftData>, imageFile?: File, user?: any) => Promise<string | null>
+  autoSave: (data: Partial<FirebaseDraftData>, imageFile?: File, user?: any) => void
   deleteDraft: (id: string) => Promise<boolean>
   getDraft: (id: string) => Promise<FirebaseDraftData | null>
   refreshDrafts: () => Promise<void>
@@ -73,6 +74,12 @@ export const useFirebaseDrafts = (options: UseFirebaseDraftsOptions = {}): UseFi
 
   // Set up real-time listener or fetch drafts
   useEffect(() => {
+    // Don't initialize if no real userId (wait for authentication)
+    if (userId === 'anonymous') {
+      setIsLoading(false)
+      return
+    }
+
     const initializeFirebase = async () => {
       // Initializing Firebase connection
       
@@ -131,7 +138,7 @@ export const useFirebaseDrafts = (options: UseFirebaseDraftsOptions = {}): UseFi
     try {
       setIsLoading(true)
       setError(null)
-      
+
       const updatedDrafts = await FirebaseDraftService.getAllDrafts(userId)
       setDrafts(updatedDrafts)
       setLastSyncTime(new Date())
@@ -147,8 +154,9 @@ export const useFirebaseDrafts = (options: UseFirebaseDraftsOptions = {}): UseFi
   }, [userId, isOnline])
 
   const saveDraft = useCallback(async (
-    data: Partial<FirebaseDraftData>, 
-    imageFile?: File
+    data: Partial<FirebaseDraftData>,
+    imageFile?: File,
+    user?: any
   ): Promise<string | null> => {
     if (!isOnline) {
       // Cannot save draft - offline
@@ -162,7 +170,7 @@ export const useFirebaseDrafts = (options: UseFirebaseDraftsOptions = {}): UseFi
       // Add user ID to draft data
       const draftData = { ...data, userId }
       
-      const draftId = await FirebaseDraftService.saveDraft(draftData, imageFile)
+      const draftId = await FirebaseDraftService.saveDraft(draftData, imageFile, user)
       
       // Draft saved successfully
       
@@ -236,14 +244,14 @@ export const useFirebaseDrafts = (options: UseFirebaseDraftsOptions = {}): UseFi
   }, [isOnline])
 
   // Auto-save functionality with debounce
-  const autoSave = useCallback((data: Partial<FirebaseDraftData>, imageFile?: File) => {
+  const autoSave = useCallback((data: Partial<FirebaseDraftData>, imageFile?: File, user?: any) => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current)
     }
 
     saveTimeoutRef.current = setTimeout(async () => {
       // Auto-save triggered
-      await saveDraft(data, imageFile)
+      await saveDraft(data, imageFile, user)
     }, 2000) // 2 second debounce
   }, [saveDraft])
 
@@ -252,6 +260,7 @@ export const useFirebaseDrafts = (options: UseFirebaseDraftsOptions = {}): UseFi
     isLoading,
     error,
     saveDraft,
+    autoSave,
     deleteDraft,
     getDraft,
     refreshDrafts,

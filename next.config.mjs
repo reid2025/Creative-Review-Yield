@@ -9,6 +9,15 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // Enable faster dev reload
+  experimental: {
+    turbo: {},
+  },
+  // Hot reload optimization
+  // Fast refresh configuration
+  compiler: {
+    removeConsole: false,
+  },
 }
 
 export default nextConfig

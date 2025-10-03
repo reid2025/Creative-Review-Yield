@@ -12,6 +12,11 @@ const config: Config = {
   ],
   theme: {
   	extend: {
+  		fontFamily: {
+  			'sans': ['var(--font-dm-sans)', 'sans-serif'],
+  			'dm-sans': ['var(--font-dm-sans)', 'sans-serif'],
+  			'league-spartan': ['var(--font-league-spartan)', 'sans-serif'],
+  		},
   		colors: {
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',

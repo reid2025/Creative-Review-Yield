@@ -10,17 +10,17 @@ export const sidebarNavItems: SidebarNavItem[] = [
   {
     label: "Dashboard",
     icon: "001-home-agreement.png",
-    href: "/",
+    href: "/dashboard",
   },
   {
-    label: "Google Sheets Records",
+    label: "Creative Stream",
     icon: "002-plus.png",
-    href: "/google-sheets-records",
+    href: "/creative-stream",
   },
   {
-    label: "Creatives",
+    label: "Creative Library",
     icon: "003-shine.png",
-    href: "/creatives",
+    href: "/creative-library",
   },
 
   {

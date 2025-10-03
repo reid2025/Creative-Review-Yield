@@ -57,7 +57,7 @@ export function QuickAddModal({ isOpen, onClose }: QuickAddModalProps) {
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-md bg-white rounded-2xl p-6">
         <DialogHeader>
-          <DialogTitle className="text-lg font-medium text-gray-900 mb-6">
+          <DialogTitle className="text-lg text-gray-900 mb-6">
             Add New Entry
           </DialogTitle>
         </DialogHeader>
@@ -70,7 +70,7 @@ export function QuickAddModal({ isOpen, onClose }: QuickAddModalProps) {
               className="group flex flex-col items-center justify-center p-6 bg-[#f9f9f9] rounded-xl hover:bg-green-50 hover:scale-105 transition-all duration-200 ease-out"
             >
               <item.icon className="w-8 h-8 text-gray-600 group-hover:text-green-600 mb-3" />
-              <span className="text-sm font-medium text-gray-700 group-hover:text-green-700">
+              <span className="text-sm text-gray-700 group-hover:text-green-700">
                 {item.label}
               </span>
             </button>
@@ -80,7 +80,7 @@ export function QuickAddModal({ isOpen, onClose }: QuickAddModalProps) {
         <div className="mt-6">
           <button
             type="button"
-            className="w-full inline-flex justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2"
+            className="w-full inline-flex justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2"
             onClick={onClose}
           >
             Cancel

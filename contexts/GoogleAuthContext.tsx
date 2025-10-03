@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Script from 'next/script'
 import { toast } from 'sonner'
+import { getSessionState, clearSessionState } from '@/lib/session-state-manager'
 
 // Google configuration
 const GOOGLE_CLIENT_ID = '277440481893-266hjhtdct3vmh1u3rs4cdtt9rrf6a8u.apps.googleusercontent.com'
@@ -56,6 +57,8 @@ interface GoogleAuthContextType {
   signOut: () => void
   gapiInited: boolean
   gisInited: boolean
+  authError: string | null
+  clearAuthError: () => void
 }
 
 const GoogleAuthContext = createContext<GoogleAuthContextType>({
@@ -66,6 +69,8 @@ const GoogleAuthContext = createContext<GoogleAuthContextType>({
   signOut: () => {},
   gapiInited: false,
   gisInited: false,
+  authError: null,
+  clearAuthError: () => {},
 })
 
 export function GoogleAuthProvider({ children }: { children: React.ReactNode }) {
@@ -74,8 +79,11 @@ export function GoogleAuthProvider({ children }: { children: React.ReactNode }) 
   const [tokenClient, setTokenClient] = useState<any>(null)
   const [gapiInited, setGapiInited] = useState(false)
   const [gisInited, setGisInited] = useState(false)
+  const [authError, setAuthError] = useState<string | null>(null)
   const router = useRouter()
   const pathname = usePathname()
+
+  const clearAuthError = () => setAuthError(null)
 
   // Initialize Google API
   const initializeGapiClient = async () => {
@@ -147,37 +155,97 @@ export function GoogleAuthProvider({ children }: { children: React.ReactNode }) 
               if (userInfoResponse.ok) {
                 const userInfo = await userInfoResponse.json()
                 
-                // Test access to the spreadsheet
-                try {
-                  await window.gapi.client.request({
-                    path: `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}`,
-                    method: 'GET',
-                  })
-                  
-                  // User has access to the spreadsheet
-                  const googleUser: GoogleUser = {
-                    email: userInfo.email,
-                    name: userInfo.name,
-                    picture: userInfo.picture,
-                    access_token: response.access_token
+                // Test access to the spreadsheet with retry logic
+                const testSpreadsheetAccess = async (retries = 3) => {
+                  // Give GAPI client a moment to be fully ready
+                  await new Promise(resolve => setTimeout(resolve, 500))
+
+                  for (let i = 0; i < retries; i++) {
+                    try {
+                      await window.gapi.client.request({
+                        path: `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}`,
+                        method: 'GET',
+                      })
+
+                      // User has access to the spreadsheet
+                      const googleUser: GoogleUser = {
+                        email: userInfo.email,
+                        name: userInfo.name,
+                        picture: userInfo.picture,
+                        access_token: response.access_token
+                      }
+
+                      // Store in localStorage
+                      localStorage.setItem('google_access_token', response.access_token)
+                      localStorage.setItem('google_user', JSON.stringify(googleUser))
+
+                      setUser(googleUser)
+                      toast.success(`Welcome back, ${userInfo.name}!`)
+
+                      // Check if there's a saved session state to restore
+                      const savedState = getSessionState()
+
+                      if (savedState && pathname === '/login') {
+                        console.log('🔄 Restoring session state:', savedState)
+                        toast.success('Redirecting you back to where you left off...')
+
+                        // Clear the saved state after restoring
+                        clearSessionState()
+
+                        // Redirect to saved URL
+                        router.push(savedState.url)
+                      } else if (pathname === '/login') {
+                        // No saved state, go to dashboard
+                        router.push('/dashboard')
+                      }
+
+                      return // Success, exit function
+
+                    } catch (error) {
+                      console.log(`Spreadsheet access attempt ${i + 1} failed:`, error)
+                      console.log('Error type:', typeof error)
+                      console.log('Error keys:', error ? Object.keys(error) : 'null')
+                      console.log('Error stringified:', JSON.stringify(error))
+
+                      if (i === retries - 1) {
+                        // Last attempt failed
+                        console.error('No access to spreadsheet after retries:', error)
+
+                        // Parse the GAPI error object more carefully
+                        let errorMessage = 'Unable to verify spreadsheet access. Please try again.'
+
+                        try {
+                          // GAPI errors can have different structures
+                          if (error && typeof error === 'object') {
+                            const result = (error as any).result
+                            const details = (error as any).details || (error as any).error
+                            const status = (error as any).status || result?.error?.code
+
+                            if (status === 403 || status === '403') {
+                              errorMessage = 'You do not have access to the required spreadsheet. Please use your company email or contact your administrator.'
+                            } else if (status === 401 || status === '401') {
+                              errorMessage = 'Authentication failed. Please try signing in again.'
+                            } else if (details || result?.error) {
+                              errorMessage = 'Unable to verify spreadsheet access. Please contact support if this continues.'
+                            }
+                          }
+                        } catch (parseError) {
+                          console.log('Error parsing GAPI error:', parseError)
+                          // Use default message
+                        }
+
+                        setAuthError(errorMessage)
+                        toast.error(errorMessage)
+                        window.gapi.client.setToken(null)
+                      } else {
+                        // Wait before retry
+                        await new Promise(resolve => setTimeout(resolve, 1000))
+                      }
+                    }
                   }
-                  
-                  // Store in localStorage
-                  localStorage.setItem('google_access_token', response.access_token)
-                  localStorage.setItem('google_user', JSON.stringify(googleUser))
-                  
-                  setUser(googleUser)
-                  toast.success(`Welcome, ${userInfo.name}!`)
-                  
-                  // Redirect to home if on login page
-                  if (pathname === '/login') {
-                    router.push('/')
-                  }
-                } catch (error) {
-                  console.error('No access to spreadsheet:', error)
-                  toast.error('You do not have access to the required spreadsheet. Please contact administrator.')
-                  window.gapi.client.setToken(null)
                 }
+
+                await testSpreadsheetAccess()
               }
             } catch (error) {
               console.error('Error getting user info:', error)
@@ -198,16 +266,31 @@ export function GoogleAuthProvider({ children }: { children: React.ReactNode }) 
 
   // Sign in function
   const signIn = () => {
-    if (!tokenClient) {
-      toast.error('Authentication not initialized')
+    // Clear any previous errors
+    clearAuthError()
+
+    // Check if both APIs are initialized
+    if (!gapiInited || !gisInited) {
+      const errorMsg = 'Authentication services are still loading. Please wait a moment and try again.'
+      setAuthError(errorMsg)
+      toast.error(errorMsg)
       return
     }
-    
+
+    if (!tokenClient) {
+      const errorMsg = 'Authentication not initialized'
+      setAuthError(errorMsg)
+      toast.error(errorMsg)
+      return
+    }
+
     try {
       (tokenClient as any).requestAccessToken()
     } catch (error) {
       console.error('Sign in error:', error)
-      toast.error('Failed to sign in')
+      const errorMsg = 'Failed to sign in'
+      setAuthError(errorMsg)
+      toast.error(errorMsg)
     }
   }
 
@@ -236,7 +319,7 @@ export function GoogleAuthProvider({ children }: { children: React.ReactNode }) 
   }, [user, isLoading, pathname, router])
 
   return (
-    <GoogleAuthContext.Provider 
+    <GoogleAuthContext.Provider
       value={{
         user,
         isLoading,
@@ -245,6 +328,8 @@ export function GoogleAuthProvider({ children }: { children: React.ReactNode }) 
         signOut,
         gapiInited,
         gisInited,
+        authError,
+        clearAuthError,
       }}
     >
       {/* Load Google API Scripts */}

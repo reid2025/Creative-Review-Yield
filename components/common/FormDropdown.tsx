@@ -42,7 +42,7 @@ export function FormDropdown({
             onClick={option.onClick}
             className={option.description ? "flex-col items-start gap-1 p-4" : ""}
           >
-            <div className="font-medium">{option.label}</div>
+            <div className="">{option.label}</div>
             {option.description && (
               <div className="text-xs text-gray-500">
                 {option.description}

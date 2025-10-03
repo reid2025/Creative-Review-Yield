@@ -15,6 +15,7 @@ export interface Creative {
   id: string
   creativeFilename: string
   imageUrl?: string
+  imageAssetId?: string         // Stable Image Asset ID from Google Sheets
   litigationName?: string
   campaignType?: string
   designer?: string
@@ -24,7 +25,7 @@ export interface Creative {
   status?: 'draft' | 'saved'
   createdAt?: Timestamp
   lastSaved?: Timestamp
-  
+
   // New fields from Google Sheets sync
   accountName?: string          // Account Name from Google Sheets
   campaignName?: string         // Campaign Name from Google Sheets
@@ -82,9 +83,15 @@ export interface GoogleSheetRow {
   campaignName?: string
   imageAssetName?: string
   imageAssetUrl?: string
+  imageAssetId?: string
+  adSetId?: string
+  adId?: string
+  adCreativeId?: string
   cost?: string
   costPerWebsiteLead?: string
   costPerClick?: string
+  websiteLeads?: string
+  linkClicks?: string
   date?: string
   [key: string]: string | undefined  // Allow other fields
 }

@@ -20,8 +20,37 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes bounce-rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  5% {
+    transform: rotate(180deg);
+  }
+  10% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes bounce-rotate-fast {
+  0% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(180deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
 body {
   font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  color: #000000;
 }
 
 /* Ensure smooth scrolling and proper wheel events */
@@ -57,18 +86,24 @@ main {
   .text-balance {
     text-wrap: balance;
   }
+
+  .text-3xl {
+    font-size: 2.275rem;
+    line-height: 2.25rem;
+    letter-spacing: -2px;
+  }
 }
 
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
+    --foreground: 85 65% 65%;
     --card: 0 0% 100%;
     --card-foreground: 0 0% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
+    --primary: 85 65% 65%;
+    --primary-foreground: 0 0% 9%;
     --secondary: 0 0% 96.1%;
     --secondary-foreground: 0 0% 9%;
     --muted: 0 0% 96.1%;
@@ -97,12 +132,12 @@ main {
   }
   .dark {
     --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
+    --foreground: 85 65% 65%;
     --card: 0 0% 3.9%;
     --card-foreground: 0 0% 98%;
     --popover: 0 0% 3.9%;
     --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
+    --primary: 85 65% 65%;
     --primary-foreground: 0 0% 9%;
     --secondary: 0 0% 14.9%;
     --secondary-foreground: 0 0% 98%;
@@ -137,6 +172,557 @@ main {
   }
   body {
     @apply bg-background text-foreground;
+  }
+  
+  /* Global text styling - DM Sans medium weight black text */
+  /* *:not([data-performance-accordion="true"] *):not([data-login-page="true"] *):not([data-radix-popover-content] *):not([data-filter-header="true"] *) {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    color: #000000;
+  } */
+  
+  /* Form elements - exclude dropdown content */
+  input:not([data-radix-popover-content] *),
+  select:not([data-radix-popover-content] *),
+  textarea:not([data-radix-popover-content] *),
+  label:not([data-radix-popover-content] *),
+  .form-element:not([data-radix-popover-content] *) {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    color: #000000;
+  }
+
+  /* Buttons - only set font, let color be defined by component classes */
+  button:not([data-radix-popover-content] *):not([data-performance-accordion="true"] [data-radix-popover-content] *):not([data-filter-header="true"] *) {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+  }
+  
+  /* Placeholders */
+  input::placeholder,
+  textarea::placeholder {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    color: #000000;
+  }
+  
+  /* UI Library component overrides - exclude creative library accordion dropdown */
+  [data-radix-select-trigger]:not([data-performance-accordion="true"] *),
+  [data-radix-select-content]:not([data-performance-accordion="true"] *),
+  [data-radix-select-item]:not([data-performance-accordion="true"] *),
+  [data-radix-popover-trigger]:not([data-performance-accordion="true"] *),
+  [data-radix-popover-content]:not([data-performance-accordion="true"] *),
+  [data-radix-checkbox-root]:not([data-performance-accordion="true"] *),
+  [data-radix-switch-root]:not([data-performance-accordion="true"] *),
+  [data-radix-select-value]:not([data-performance-accordion="true"] *),
+  .select-trigger:not([data-performance-accordion="true"] *),
+  .select-content:not([data-performance-accordion="true"] *),
+  .select-item:not([data-performance-accordion="true"] *) {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    color: #000000;
+  }
+  
+  /* Menu Sidebar - Force white text for all menu items except active */
+  #menu-sidebar,
+  #menu-sidebar *,
+  #menu-sidebar span,
+  #menu-sidebar p,
+  #menu-sidebar a,
+  #menu-sidebar div,
+  #menu-sidebar nav,
+  #menu-sidebar ul,
+  #menu-sidebar li {
+    color: #ffffff;
+  }
+  
+  /* Navigation items, settings, tag glossary, avatar name and email - all white */
+  #menu-sidebar nav a,
+  #menu-sidebar nav span,
+  #menu-sidebar .text-white,
+  #menu-sidebar .text-white *,
+  #menu-sidebar [role="navigation"] *,
+  #menu-sidebar ul li a,
+  #menu-sidebar ul li span {
+    color: #ffffff;
+  }
+  
+  /* Active menu items keep their styling (black text on green background) */
+  #menu-sidebar .bg-\[#89DA1A\],
+  #menu-sidebar .bg-gradient-to-r {
+    color: #000000;
+  }
+  
+  #menu-sidebar .bg-\[#89DA1A\] *,
+  #menu-sidebar .bg-gradient-to-r * {
+    color: #000000;
+  }
+  
+  /* Semi-transparent white for tagline text */
+  #menu-sidebar .text-\[#ffffffb3\],
+  #menu-sidebar .text-\[#ffffffb3\] * {
+    color: #ffffffb3;
+  }
+  
+  /* Performance, CTA, Attributes, Metadata, and Visual Grid accordion overrides - Force ALL elements to white */
+  [data-performance-accordion="true"],
+  [data-performance-accordion="true"] *,
+  [data-performance-accordion="true"] .text-white,
+  [data-performance-accordion="true"] .text-white *,
+  [data-performance-accordion="true"] input,
+  [data-performance-accordion="true"] label,
+  [data-performance-accordion="true"] button,
+  [data-performance-accordion="true"] span,
+  [data-performance-accordion="true"] div,
+  [data-cta-accordion="true"],
+  [data-cta-accordion="true"] *,
+  [data-cta-accordion="true"] .text-white,
+  [data-cta-accordion="true"] .text-white *,
+  [data-cta-accordion="true"] input,
+  [data-cta-accordion="true"] label,
+  [data-cta-accordion="true"] button,
+  [data-cta-accordion="true"] span,
+  [data-cta-accordion="true"] div,
+  [data-attributes-accordion="true"],
+  [data-attributes-accordion="true"] *,
+  [data-attributes-accordion="true"] .text-white,
+  [data-attributes-accordion="true"] .text-white *,
+  [data-attributes-accordion="true"] input,
+  [data-attributes-accordion="true"] label,
+  [data-attributes-accordion="true"] button,
+  [data-attributes-accordion="true"] span,
+  [data-attributes-accordion="true"] div,
+  [data-metadata-accordion="true"],
+  [data-metadata-accordion="true"] *,
+  [data-metadata-accordion="true"] .text-white,
+  [data-metadata-accordion="true"] .text-white *,
+  [data-metadata-accordion="true"] input,
+  [data-metadata-accordion="true"] label,
+  [data-metadata-accordion="true"] button,
+  [data-metadata-accordion="true"] span,
+  [data-metadata-accordion="true"] div,
+  [data-layout-structure-accordion="true"],
+  [data-layout-structure-accordion="true"] *,
+  [data-layout-structure-accordion="true"] .text-white,
+  [data-layout-structure-accordion="true"] .text-white *,
+  [data-layout-structure-accordion="true"] input,
+  [data-layout-structure-accordion="true"] label,
+  [data-layout-structure-accordion="true"] button,
+  [data-layout-structure-accordion="true"] span,
+  [data-layout-structure-accordion="true"] div,
+  [data-copy-headline-accordion="true"],
+  [data-copy-headline-accordion="true"] *,
+  [data-copy-headline-accordion="true"] .text-white,
+  [data-copy-headline-accordion="true"] .text-white *,
+  [data-copy-headline-accordion="true"] input,
+  [data-copy-headline-accordion="true"] label,
+  [data-copy-headline-accordion="true"] button,
+  [data-copy-headline-accordion="true"] span,
+  [data-copy-headline-accordion="true"] div,
+  [data-brand-design-accordion="true"],
+  [data-brand-design-accordion="true"] *,
+  [data-brand-design-accordion="true"] .text-white,
+  [data-brand-design-accordion="true"] .text-white *,
+  [data-brand-design-accordion="true"] input,
+  [data-brand-design-accordion="true"] label,
+  [data-brand-design-accordion="true"] button,
+  [data-brand-design-accordion="true"] span,
+  [data-brand-design-accordion="true"] div,
+  [data-cta-grid-accordion="true"],
+  [data-cta-grid-accordion="true"] *,
+  [data-cta-grid-accordion="true"] .text-white,
+  [data-cta-grid-accordion="true"] .text-white *,
+  [data-cta-grid-accordion="true"] input,
+  [data-cta-grid-accordion="true"] label,
+  [data-cta-grid-accordion="true"] button,
+  [data-cta-grid-accordion="true"] span,
+  [data-cta-grid-accordion="true"] div {
+    color: #ffffff !important;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+  }
+  
+  [data-performance-accordion="true"] input::placeholder,
+  [data-cta-accordion="true"] input::placeholder,
+  [data-attributes-accordion="true"] input::placeholder,
+  [data-metadata-accordion="true"] input::placeholder,
+  [data-layout-structure-accordion="true"] input::placeholder,
+  [data-copy-headline-accordion="true"] input::placeholder,
+  [data-brand-design-accordion="true"] input::placeholder,
+  [data-cta-grid-accordion="true"] input::placeholder {
+    color: #9ca3af;
+  }
+  
+  /* Black color for selected pills - better readability */
+  [data-performance-accordion="true"] .pill-selected,
+  [data-performance-accordion="true"] .pill-selected *,
+  [data-cta-accordion="true"] .pill-selected,
+  [data-cta-accordion="true"] .pill-selected *,
+  [data-attributes-accordion="true"] .pill-selected,
+  [data-attributes-accordion="true"] .pill-selected *,
+  [data-metadata-accordion="true"] .pill-selected,
+  [data-metadata-accordion="true"] .pill-selected *,
+  [data-layout-structure-accordion="true"] .pill-selected,
+  [data-layout-structure-accordion="true"] .pill-selected *,
+  [data-copy-headline-accordion="true"] .pill-selected,
+  [data-copy-headline-accordion="true"] .pill-selected *,
+  [data-brand-design-accordion="true"] .pill-selected,
+  [data-brand-design-accordion="true"] .pill-selected *,
+  [data-cta-grid-accordion="true"] .pill-selected,
+  [data-cta-grid-accordion="true"] .pill-selected * {
+    color: #000000 !important;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+  }
+  
+  /* White color only for non-selected buttons */
+  [data-performance-accordion="true"] button:not(.pill-selected),
+  [data-cta-accordion="true"] button:not(.pill-selected),
+  [data-attributes-accordion="true"] button:not(.pill-selected),
+  [data-metadata-accordion="true"] button:not(.pill-selected),
+  [data-layout-structure-accordion="true"] button:not(.pill-selected),
+  [data-copy-headline-accordion="true"] button:not(.pill-selected),
+  [data-brand-design-accordion="true"] button:not(.pill-selected),
+  [data-cta-grid-accordion="true"] button:not(.pill-selected) {
+    color: #ffffff;
+  }
+  
+  /* Force white text in dropdown with ultra high specificity */
+  [data-performance-accordion="true"] [data-radix-popover-content],
+  div[data-radix-popover-content],
+  [data-radix-popover-content][data-side],
+  [data-radix-popover-content] {
+    background-color: black;
+    border-color: #333333;
+    color: white;
+  }
+  
+  [data-performance-accordion="true"] [data-radix-popover-content] *,
+  [data-performance-accordion="true"] [data-radix-popover-content] button,
+  [data-performance-accordion="true"] [data-radix-popover-content] div,
+  [data-performance-accordion="true"] [data-radix-popover-content] span,
+  div[data-radix-popover-content] *,
+  div[data-radix-popover-content] button,
+  div[data-radix-popover-content] div,
+  div[data-radix-popover-content] span,
+  [data-radix-popover-content][data-side] *,
+  [data-radix-popover-content][data-side] button,
+  [data-radix-popover-content] *,
+  [data-radix-popover-content] button,
+  [data-radix-popover-content] div,
+  [data-radix-popover-content] span {
+    color: white;
+    background-color: inherit;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+  }
+  
+  [data-performance-accordion="true"] [data-radix-popover-content] button:hover,
+  div[data-radix-popover-content] button:hover,
+  [data-radix-popover-content][data-side] button:hover,
+  [data-radix-popover-content] button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+  }
+  
+  /* Login page overrides - Allow white text */
+  [data-login-page="true"] * {
+    color: inherit;
+  }
+  
+  [data-login-page="true"] .text-white,
+  [data-login-page="true"] .text-white * {
+    color: #ffffff;
+  }
+
+  /* ===== Creative Library Filter Container - Scoped Dark Styling ===== */
+  #creative-filters {
+    --cl-fg: #fff;
+    --cl-muted: #c7c7c7;
+    --cl-bg: #0e0e0e;
+
+    color: var(--cl-fg);
+    background: var(--cl-bg);
+  }
+
+  /* Ensure all children inherit white text */
+  #creative-filters * {
+    color: inherit;
+  }
+
+  /* Inputs, selects, and pills */
+  #creative-filters input,
+  #creative-filters select,
+  #creative-filters .radix-select-trigger,
+  #creative-filters [data-radix-select-trigger],
+  #creative-filters button,
+  #creative-filters [role="textbox"],
+  #creative-filters [type="text"],
+  #creative-filters [type="date"],
+  #creative-filters [type="number"] {
+    color: var(--cl-fg);
+    background: #141414;
+    border: 1px solid #2a2a2a;
+  }
+
+  /* Placeholder text */
+  #creative-filters ::placeholder {
+    color: var(--cl-muted);
+    opacity: .9;
+  }
+
+  /* Pills and toggles */
+  #creative-filters .pill,
+  #creative-filters .toggle {
+    color: var(--cl-fg);
+    border-color: #2a2a2a;
+  }
+
+  /* Active pills have black text */
+  #creative-filters .pill.active,
+  #creative-filters .pill[data-state="checked"],
+  #creative-filters .pill[aria-pressed="true"],
+  #creative-filters .toggle.active,
+  #creative-filters .toggle[data-state="checked"],
+  #creative-filters .toggle[aria-pressed="true"] {
+    color: #000000;
+  }
+
+  /* Dropdown menus / popovers INSIDE the filter container */
+  #creative-filters [data-radix-popover-content],
+  #creative-filters [data-radix-select-content],
+  #creative-filters [data-radix-combobox-content] {
+    color: var(--cl-fg);
+    background: #111;
+    border: 1px solid #2a2a2a;
+    box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  }
+
+  /* Dropdown items / options text */
+  #creative-filters [role="option"],
+  #creative-filters [data-highlighted],
+  #creative-filters [data-state="checked"],
+  #creative-filters [data-radix-collection-item],
+  #creative-filters [data-radix-popover-content] *,
+  #creative-filters [data-radix-popover-content] button,
+  #creative-filters [data-radix-popover-content] div,
+  #creative-filters [data-radix-popover-content] span {
+    color: var(--cl-fg);
+  }
+
+  /* Force white text on all form elements and buttons */
+  #creative-filters input:not(.pill.active):not([data-state="checked"]),
+  #creative-filters button:not(.pill.active):not([data-state="checked"]),
+  #creative-filters span:not(.pill.active):not([data-state="checked"]),
+  #creative-filters div:not(.pill.active):not([data-state="checked"]) {
+    color: var(--cl-fg);
+  }
+
+  /* Creative filters buttons - force white text */
+  #creative-filters button:not([data-radix-popover-content] *):not([data-performance-accordion="true"] [data-radix-popover-content] *) {
+    color: #ffffff;
+  }
+
+  /* Date range dropdown options - force white text */
+  #creative-filters [data-radix-popover-content] [data-radix-select-item],
+  #creative-filters [data-radix-select-content] [data-radix-select-item],
+  #creative-filters [role="option"],
+  #creative-filters [data-radix-select-item] {
+    color: #ffffff;
+  }
+
+  /* Performance, CTA, and Attributes accordion popover buttons - force white text */
+  [data-performance-accordion="true"] [data-radix-popover-content] button,
+  [data-performance-accordion="true"] [data-radix-popover-content] button span,
+  [data-performance-accordion="true"] [data-radix-popover-content] .text-white,
+  [data-cta-accordion="true"] [data-radix-popover-content] button,
+  [data-cta-accordion="true"] [data-radix-popover-content] button span,
+  [data-cta-accordion="true"] [data-radix-popover-content] .text-white,
+  [data-attributes-accordion="true"] [data-radix-popover-content] button,
+  [data-attributes-accordion="true"] [data-radix-popover-content] button span,
+  [data-attributes-accordion="true"] [data-radix-popover-content] .text-white {
+    color: #ffffff !important;
+  }
+  
+  /* Hide default Radix Select caret and ensure custom carets are visible */
+  [data-radix-select-trigger] > [data-radix-select-icon] {
+    display: none;
+  }
+  
+  /* Custom dropdown caret styling */
+  .dropdown-caret {
+    color: #000000;
+    pointer-events: none;
+  }
+  
+  /* Prevent Select value truncation and ensure proper typography */
+  [data-radix-select-value] {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    color: #000000;
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.25;
+  }
+  
+  /* Ensure SelectTrigger doesn't clip content */
+  [data-radix-select-trigger] {
+    overflow: visible;
+  }
+  
+  /* Tabular nums for consistent digit widths in dropdowns */
+  .font-variant-numeric-tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  
+  /* Custom checkbox styling - transparent background, black border, black checkmark */
+  [data-radix-checkbox-root] {
+    background-color: transparent;
+    border: 1px solid #000000;
+    border-radius: 4px;
+  }
+  
+  [data-radix-checkbox-root][data-state="checked"] {
+    background-color: transparent;
+    border-color: #000000;
+  }
+  
+  [data-radix-checkbox-indicator] {
+    color: #000000;
+  }
+  
+  [data-radix-checkbox-indicator] svg {
+    color: #000000;
+    fill: #000000;
+  }
+
+  /* FINAL OVERRIDE - Date range dropdown options must be white */
+  [data-performance-accordion="true"] [data-radix-popover-content] button {
+    color: #ffffff !important;
+    background-color: red !important;
+  }
+
+  [data-performance-accordion="true"] [data-radix-popover-content] button span,
+  [data-cta-accordion="true"] [data-radix-popover-content] button span {
+    color: #ffffff !important;
+  }
+
+  [data-performance-accordion="true"] button,
+  [data-cta-accordion="true"] button,
+  [data-attributes-accordion="true"] button {
+    color: #ffffff !important;
+  }
+
+  [data-performance-accordion="true"] button:not(.pill-selected):not([data-radix-popover-content] *):not(:first-child),
+  [data-cta-accordion="true"] button:not(.pill-selected):not([data-radix-popover-content] *):not(:first-child),
+  [data-attributes-accordion="true"] button:not(.pill-selected):not([data-radix-popover-content] *):not(:first-child),
+  [data-layout-structure-accordion="true"] button:not(.pill-selected):not([data-radix-popover-content] *):not(:first-child),
+  [data-copy-headline-accordion="true"] button:not(.pill-selected):not([data-radix-popover-content] *):not(:first-child),
+  [data-brand-design-accordion="true"] button:not(.pill-selected):not([data-radix-popover-content] *):not(:first-child),
+  [data-cta-grid-accordion="true"] button:not(.pill-selected):not([data-radix-popover-content] *):not(:first-child) {
+    border: 1px solid #333333 !important;
+  }
+
+  [data-performance-accordion="true"] > button:first-child,
+  [data-cta-accordion="true"] > button:first-child,
+  [data-attributes-accordion="true"] > button:first-child,
+  [data-layout-structure-accordion="true"] > button:first-child,
+  [data-copy-headline-accordion="true"] > button:first-child,
+  [data-brand-design-accordion="true"] > button:first-child,
+  [data-cta-grid-accordion="true"] > button:first-child {
+    border: none !important;
+  }
+
+
+  /* Clear Filters button - force white text */
+  [data-filter-header="true"] button {
+    color: #ffffff !important;
+  }
+
+  /* Force dark background and white text on dropdowns */
+  [data-performance-accordion="true"] [data-radix-popover-content],
+  [data-cta-accordion="true"] [data-radix-popover-content],
+  [data-attributes-accordion="true"] [data-radix-popover-content],
+  [data-layout-structure-accordion="true"] [data-radix-popover-content],
+  [data-copy-headline-accordion="true"] [data-radix-popover-content],
+  [data-brand-design-accordion="true"] [data-radix-popover-content],
+  [data-cta-grid-accordion="true"] [data-radix-popover-content] {
+    background-color: #141414 !important;
+    color: #ffffff !important;
+  }
+
+  [data-performance-accordion="true"] [data-radix-popover-content] *,
+  [data-cta-accordion="true"] [data-radix-popover-content] *,
+  [data-cta-accordion="true"] [data-radix-popover-content] span,
+  [data-cta-accordion="true"] [data-radix-popover-content] div,
+  [data-attributes-accordion="true"] [data-radix-popover-content] *,
+  [data-attributes-accordion="true"] [data-radix-popover-content] span,
+  [data-attributes-accordion="true"] [data-radix-popover-content] div,
+  [data-layout-structure-accordion="true"] [data-radix-popover-content] *,
+  [data-layout-structure-accordion="true"] [data-radix-popover-content] span,
+  [data-layout-structure-accordion="true"] [data-radix-popover-content] div,
+  [data-copy-headline-accordion="true"] [data-radix-popover-content] *,
+  [data-copy-headline-accordion="true"] [data-radix-popover-content] span,
+  [data-copy-headline-accordion="true"] [data-radix-popover-content] div,
+  [data-brand-design-accordion="true"] [data-radix-popover-content] *,
+  [data-brand-design-accordion="true"] [data-radix-popover-content] span,
+  [data-brand-design-accordion="true"] [data-radix-popover-content] div,
+  [data-cta-grid-accordion="true"] [data-radix-popover-content] *,
+  [data-cta-grid-accordion="true"] [data-radix-popover-content] span,
+  [data-cta-grid-accordion="true"] [data-radix-popover-content] div {
+    color: #ffffff !important;
+  }
+
+  /* NUCLEAR OPTION - Force white text on ALL calendar elements */
+  [data-performance-accordion="true"] [data-slot="calendar"] *,
+  [data-performance-accordion="true"] .rdp *,
+  [data-performance-accordion="true"] .rdp,
+  [data-performance-accordion="true"] .rdp-month *,
+  [data-performance-accordion="true"] .rdp-months *,
+  [data-performance-accordion="true"] .rdp-caption *,
+  [data-performance-accordion="true"] .rdp-caption_label *,
+  [data-performance-accordion="true"] .rdp-nav *,
+  [data-performance-accordion="true"] .rdp-nav_button *,
+  [data-performance-accordion="true"] .rdp-head *,
+  [data-performance-accordion="true"] .rdp-head_row *,
+  [data-performance-accordion="true"] .rdp-head_cell *,
+  [data-performance-accordion="true"] .rdp-tbody *,
+  [data-performance-accordion="true"] .rdp-row *,
+  [data-performance-accordion="true"] .rdp-cell *,
+  [data-performance-accordion="true"] .rdp-day *,
+  [data-performance-accordion="true"] .rdp-day_button *,
+  [data-performance-accordion="true"] .rdp-weekday *,
+  [data-performance-accordion="true"] button[data-day] *,
+  [data-performance-accordion="true"] button[data-day] {
+    color: #ffffff !important;
+    background-color: transparent !important;
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 500 !important;
+  }
+
+  [data-performance-accordion="true"] .rdp-day_selected,
+  [data-performance-accordion="true"] .rdp-day_selected *,
+  [data-performance-accordion="true"] button[data-selected-single="true"],
+  [data-performance-accordion="true"] [data-selected-single="true"] {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Specific rule for placeholder messages in filter dropdowns only */
+  #creative-filters [data-radix-popover-content] .flex.flex-col.items-center.justify-center span {
+    color: #ffffff !important;
+  }
+
+  /* Also target the placeholder messages in all accordion dropdowns */
+  [data-metadata-accordion="true"] [data-radix-popover-content] .flex.flex-col.items-center.justify-center span,
+  [data-cta-accordion="true"] [data-radix-popover-content] .flex.flex-col.items-center.justify-center span,
+  [data-attributes-accordion="true"] [data-radix-popover-content] .flex.flex-col.items-center.justify-center span,
+  [data-layout-structure-accordion="true"] [data-radix-popover-content] .flex.flex-col.items-center.justify-center span,
+  [data-copy-headline-accordion="true"] [data-radix-popover-content] .flex.flex-col.items-center.justify-center span,
+  [data-brand-design-accordion="true"] [data-radix-popover-content] .flex.flex-col.items-center.justify-center span,
+  [data-cta-grid-accordion="true"] [data-radix-popover-content] .flex.flex-col.items-center.justify-center span {
+    color: #ffffff !important;
   }
 }
 

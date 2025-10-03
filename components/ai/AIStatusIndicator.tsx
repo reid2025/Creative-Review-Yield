@@ -127,7 +127,7 @@ export function AIStatusIndicator({ className = '', showDetails = false }: AISta
         className={`${getStatusColor()} transition-colors`}
       >
         {getStatusIcon()}
-        <span className="ml-1.5 text-xs font-medium">{getStatusText()}</span>
+        <span className="ml-1.5 text-xs">{getStatusText()}</span>
       </Badge>
       {statusMessage && (
         <span className="text-xs text-gray-500">{statusMessage}</span>

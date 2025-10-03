@@ -1,0 +1,202 @@
+'use client'
+
+import { useState } from 'react'
+import { ChevronDown } from 'lucide-react'
+import { Label } from '@/components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+
+interface CTAGridFilters {
+  ctaVerb: string[]
+  ctaStyleGroup: string[]
+  ctaColor: string[]
+  ctaPosition: string[]
+}
+
+interface CTAGridAccordionProps {
+  filters: CTAGridFilters
+  onChange: (filters: Partial<CTAGridFilters>) => void
+  isOpen?: boolean
+  onToggle?: () => void
+  dynamicOptions?: {
+    ctaVerb?: string[]
+    ctaStyleGroup?: string[]
+    ctaColor?: string[]
+    ctaPosition?: string[]
+  }
+}
+
+interface MultiSelectProps {
+  label: string
+  options: string[]
+  selectedValues: string[]
+  onChange: (values: string[]) => void
+}
+
+const MultiSelect: React.FC<MultiSelectProps> = ({ label, options, selectedValues, onChange }) => {
+  const [open, setOpen] = useState(false)
+
+  const handleToggleOption = (option: string) => {
+    if (selectedValues.includes(option)) {
+      onChange(selectedValues.filter(v => v !== option))
+    } else {
+      onChange([...selectedValues, option])
+    }
+  }
+
+  const getDisplayValue = () => {
+    if (selectedValues.length === 0) return `Select ${label}`
+    if (selectedValues.length === 1) return selectedValues[0]
+    return `${selectedValues.length} selected`
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-white text-sm font-medium uppercase">{label}</Label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className={cn(
+              "w-full justify-between text-white hover:bg-white/10 hover:text-white"
+            )}
+            style={{ 
+              color: 'white !important',
+              backgroundColor: 'transparent',
+              border: '1px solid #333333 !important'
+            }}
+          >
+            <span className="text-white truncate">
+              {getDisplayValue()}
+            </span>
+            <ChevronDown className="h-4 w-4 text-white flex-shrink-0" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent 
+          className="p-2 bg-black text-white border-[#333333]" 
+          style={{ 
+            backgroundColor: '#141414', 
+            color: 'white',
+            width: 'var(--radix-popover-trigger-width)'
+          }}
+          sideOffset={4}
+        >
+          <div className="space-y-1 max-h-60 overflow-y-auto">
+            {options.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <span className="text-2xl mb-2">😪</span>
+                <span className="text-white text-sm">No CTA options found</span>
+              </div>
+            ) : (
+              options.map((option) => (
+                <Button
+                  key={option}
+                  variant="ghost"
+                  className={cn(
+                    "w-full justify-start text-white hover:bg-white/10 hover:text-white",
+                    selectedValues.includes(option) && "bg-white/20 text-white"
+                  )}
+                  style={{ color: 'white' }}
+                  onClick={() => handleToggleOption(option)}
+                >
+                  <div className="flex items-center space-x-2">
+                    <div className={cn(
+                      "w-4 h-4 border rounded",
+                      selectedValues.includes(option) ? "bg-white border-white" : "border-gray-400"
+                    )}>
+                      {selectedValues.includes(option) && (
+                        <div className="w-full h-full bg-white rounded flex items-center justify-center">
+                          <div className="w-2 h-2 bg-black rounded"></div>
+                        </div>
+                      )}
+                    </div>
+                    <span style={{ color: '#ffffff' }}>{option}</span>
+                  </div>
+                </Button>
+              ))
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
+}
+
+export const CTAGridAccordion: React.FC<CTAGridAccordionProps> = ({
+  filters,
+  onChange,
+  isOpen = false,
+  onToggle,
+  dynamicOptions
+}) => {
+
+  // Use dynamic options if available, otherwise fall back to static options
+  const ctaVerbOptions = dynamicOptions?.ctaVerb || [
+    'Shop', 'Get', 'Learn', 'Join', 'Buy', 'Download', 'Try', 'Start', 'Sign Up', 'Contact'
+  ]
+
+  const ctaStyleGroupOptions = dynamicOptions?.ctaStyleGroup || [
+    'Button', 'Link', 'Banner', 'Text Link', 'Card', 'Popup', 'Inline', 'Floating', 'Sticky'
+  ]
+
+  const ctaColorOptions = dynamicOptions?.ctaColor || [
+    'Green', 'Blue', 'Orange', 'Primary', 'Secondary', 'Red', 'Purple', 'Black', 'White', 'Gray'
+  ]
+
+  const ctaPositionOptions = dynamicOptions?.ctaPosition || [
+    'Top', 'Bottom', 'Center', 'Sidebar', 'Left', 'Right', 'Header', 'Footer', 'Overlay'
+  ]
+
+  return (
+    <div className="w-full" data-cta-grid-accordion="true">
+      {/* Accordion Header */}
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between p-4 text-left rounded-t-[30px]"
+        style={{ border: 'none !important' }}
+      >
+        <span className="text-white font-medium text-sm">CTA</span>
+        <ChevronDown 
+          className={cn(
+            "h-4 w-4 text-white transition-transform",
+            isOpen && "transform rotate-180"
+          )}
+        />
+      </button>
+
+      {/* Accordion Content */}
+      {isOpen && (
+        <div className="p-4 space-y-4">
+          <MultiSelect
+            label="CTA Verb"
+            options={ctaVerbOptions}
+            selectedValues={filters.ctaVerb}
+            onChange={(values) => onChange({ ctaVerb: values })}
+          />
+
+          <MultiSelect
+            label="CTA Style Group"
+            options={ctaStyleGroupOptions}
+            selectedValues={filters.ctaStyleGroup}
+            onChange={(values) => onChange({ ctaStyleGroup: values })}
+          />
+
+          <MultiSelect
+            label="CTA Color"
+            options={ctaColorOptions}
+            selectedValues={filters.ctaColor}
+            onChange={(values) => onChange({ ctaColor: values })}
+          />
+
+          <MultiSelect
+            label="CTA Position"
+            options={ctaPositionOptions}
+            selectedValues={filters.ctaPosition}
+            onChange={(values) => onChange({ ctaPosition: values })}
+          />
+        </div>
+      )}
+    </div>
+  )
+}

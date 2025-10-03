@@ -5,11 +5,21 @@ import { useGoogleAuth } from '@/contexts/GoogleAuthContext'
 import { SidebarProvider } from '@/components/SidebarProvider'
 import { Sidebar } from '@/components/Sidebar'
 import { Loader2 } from 'lucide-react'
+import { useSessionMonitor } from '@/hooks/useSessionMonitor'
+import { SessionExpirationModal } from '@/components/SessionExpirationModal'
 
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const { user, isLoading } = useGoogleAuth()
-  
+
+  // Monitor session expiration
+  const {
+    showExpirationModal,
+    showWarningModal,
+    setShowExpirationModal,
+    handleRefreshSession
+  } = useSessionMonitor()
+
   // Hide sidebar on login page or when not authenticated
   const hideSidebar = pathname === '/login' || !user
   
@@ -37,13 +47,20 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
     <SidebarProvider>
       <div className="flex h-screen w-full bg-black">
         <Sidebar />
-        
+
         <div className="flex flex-col bg-[#e5e5e5] rounded-tl-[28px] rounded-bl-[28px] overflow-visible relative z-10 flex-1">
-          <main className="flex flex-col gap-4 px-[50px] py-[50px] flex-1 overflow-y-auto h-full overflow-x-visible relative">
+          <main className="flex flex-col gap-4 px-[30px] py-[30px] flex-1 overflow-y-auto h-full overflow-x-visible relative">
             {children}
           </main>
         </div>
       </div>
+
+      {/* Session Expiration Modal */}
+      <SessionExpirationModal
+        isOpen={showExpirationModal || showWarningModal}
+        showWarning={showWarningModal && !showExpirationModal}
+        onLoginAgain={handleRefreshSession}
+      />
     </SidebarProvider>
   )
 }
